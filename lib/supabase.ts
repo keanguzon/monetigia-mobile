@@ -66,8 +66,8 @@ let _supabase: SupabaseClient | null = null;
 export function getSupabase(): SupabaseClient {
   if (_supabase) return _supabase;
 
-  const url = Constants.expoConfig?.extra?.supabaseUrl;
-  const key = Constants.expoConfig?.extra?.supabaseAnonKey;
+  const url = process.env.EXPO_PUBLIC_SUPABASE_URL || Constants.expoConfig?.extra?.supabaseUrl;
+  const key = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || Constants.expoConfig?.extra?.supabaseAnonKey;
 
   if (!url || !key) {
     throw new Error('Supabase config missing. Ensure EXPO_PUBLIC_SUPABASE_URL is set.');
