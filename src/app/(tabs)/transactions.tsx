@@ -1,7 +1,7 @@
-import React, { useEffect, useState, useCallback } from "react";
-import { View, Text, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity, TextInput, DeviceEventEmitter, Alert, StyleSheet } from "react-native";
+import React, { useEffect, useState, useCallback, useRef } from "react";
+import { View, Text, FlatList, RefreshControl, ActivityIndicator, TouchableOpacity, TextInput, DeviceEventEmitter, Alert, StyleSheet, ScrollView } from "react-native";
 import { getSupabase } from "../../../lib/supabase";
-import { ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Search, Calendar, Tag, Trash2, SlidersHorizontal, Plus } from "lucide-react-native";
+import { ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Search, SlidersHorizontal, Trash2 } from "lucide-react-native";
 import { useSession } from "../_layout";
 import { useTheme } from "../../theme/ThemeProvider";
 import { GlassCard } from "../../components/ui/GlassCard";
@@ -10,6 +10,8 @@ import { EVENTS } from "../../lib/events";
 import { Swipeable } from "react-native-gesture-handler";
 import * as Haptics from "expo-haptics";
 import { useFocusEffect } from "expo-router";
+
+const PAGE_SIZE = 20;
 
 const formatCurrency = (amount: number) => {
   return new Intl.NumberFormat("en-PH", {
@@ -36,9 +38,18 @@ export default function TransactionsScreen() {
   const [searchQuery, setSearchQuery] = useState("");
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
 
+  // Pagination states
+  const [lastDateCursor, setLastDateCursor] = useState<string | null>(null);
+  const [lastCreatedAtCursor, setLastCreatedAtCursor] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(true);
+  const [isFetchingMore, setIsFetchingMore] = useState(false);
+
   // Modal states
   const [selectedTransaction, setSelectedTransaction] = useState<any | null>(null);
   const [detailModalVisible, setDetailModalVisible] = useState(false);
+
+  // Active Swipeable ref to close them on interaction
+  const activeSwipeableRef = useRef<any>(null);
 
   const toLocalISOWithOffset = (d: Date) => {
     const offset = -d.getTimezoneOffset();
@@ -75,70 +86,140 @@ export default function TransactionsScreen() {
     }
   };
 
-  const loadTransactions = async () => {
+  const buildQuery = useCallback((cursorDate: string | null, cursorCreatedAt: string | null) => {
+    if (!user) return null;
+    let query = getSupabase()
+      .from("transactions")
+      .select(`
+        id, type, amount, description, date, created_at, transfer_to_account_id,
+        category:categories(id,name,color), 
+        account:accounts!account_id(id,name,type),
+        transfer_to_account:accounts!transfer_to_account_id(id,name,type)
+      `)
+      .eq("user_id", user.id);
+
+    // 1. Filter by Type
+    if (typeFilter !== "all") {
+      query = query.eq("type", typeFilter);
+    }
+
+    // 2. Filter by Category
+    if (selectedCategoryId && typeFilter !== "transfer") {
+      query = query.eq("category_id", selectedCategoryId);
+    }
+
+    // 3. Timezone-Safe Date Range Filtering with upper cap to prevent future data leakage
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+    const dateVal = now.getDate();
+    const todayEnd = new Date(year, month, dateVal, 23, 59, 59, 999);
+
+    if (dateRange === "today") {
+      const todayStart = new Date(year, month, dateVal, 0, 0, 0, 0);
+      query = query
+        .gte("date", toLocalISOWithOffset(todayStart))
+        .lte("date", toLocalISOWithOffset(todayEnd));
+    } else if (dateRange === "week") {
+      const weekStart = new Date(year, month, dateVal - 6, 0, 0, 0, 0);
+      query = query
+        .gte("date", toLocalISOWithOffset(weekStart))
+        .lte("date", toLocalISOWithOffset(todayEnd));
+    } else if (dateRange === "month") {
+      const monthStart = new Date(year, month, 1, 0, 0, 0, 0);
+      query = query
+        .gte("date", toLocalISOWithOffset(monthStart))
+        .lte("date", toLocalISOWithOffset(todayEnd));
+    }
+
+    // 4. Search Query (Client side description filter, or server-side description search)
+    if (searchQuery.trim()) {
+      query = query.ilike("description", `%${searchQuery.trim()}%`);
+    }
+
+    // 5. Cursor-based pagination filter
+    if (cursorDate && cursorCreatedAt) {
+      // Use double quotes for date cursor to handle special character timezone offset (+/-)
+      query = query.or(`date.lt."${cursorDate}",and(date.eq."${cursorDate}",created_at.lt."${cursorCreatedAt}")`);
+    }
+
+    // Sort strictly by Date DESC and Created At DESC
+    query = query
+      .order("date", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(PAGE_SIZE);
+
+    return query;
+  }, [user, typeFilter, selectedCategoryId, dateRange, searchQuery]);
+
+  const loadFirstPage = async () => {
     if (!user) return;
     try {
-      let query = getSupabase()
-        .from("transactions")
-        .select(`
-          id, type, amount, description, date, created_at, transfer_to_account_id,
-          category:categories(id,name,color), 
-          account:accounts!account_id(id,name,type),
-          transfer_to_account:accounts!transfer_to_account_id(id,name,type)
-        `)
-        .eq("user_id", user.id);
+      const query = buildQuery(null, null);
+      if (!query) return;
 
-      // 1. Filter by Type
-      if (typeFilter !== "all") {
-        query = query.eq("type", typeFilter);
-      }
-
-      // 2. Filter by Category
-      if (selectedCategoryId && typeFilter !== "transfer") {
-        query = query.eq("category_id", selectedCategoryId);
-      }
-
-      // 3. Timezone-Safe Date Range Filtering
-      const now = new Date();
-      const year = now.getFullYear();
-      const month = now.getMonth();
-      const dateVal = now.getDate();
-
-      if (dateRange === "today") {
-        const todayStart = new Date(year, month, dateVal, 0, 0, 0, 0);
-        const todayEnd = new Date(year, month, dateVal, 23, 59, 59, 999);
-        query = query.gte("date", toLocalISOWithOffset(todayStart)).lte("date", toLocalISOWithOffset(todayEnd));
-      } else if (dateRange === "week") {
-        const weekStart = new Date(year, month, dateVal - 6, 0, 0, 0, 0);
-        query = query.gte("date", toLocalISOWithOffset(weekStart));
-      } else if (dateRange === "month") {
-        const monthStart = new Date(year, month, 1, 0, 0, 0, 0);
-        query = query.gte("date", toLocalISOWithOffset(monthStart));
-      }
-
-      // 4. Search Query (Client side description filter, or server-side description search)
-      if (searchQuery.trim()) {
-        query = query.ilike("description", `%${searchQuery.trim()}%`);
-      }
-
-      const { data, error } = await query
-        .order("date", { ascending: false })
-        .order("created_at", { ascending: false })
-        .limit(50);
-
+      const { data, error } = await query;
       if (error) throw error;
+
       setTransactions(data || []);
+
+      if (data && data.length === PAGE_SIZE) {
+        const lastItem = data[data.length - 1];
+        setLastDateCursor(lastItem.date);
+        setLastCreatedAtCursor(lastItem.created_at);
+        setHasMore(true);
+      } else {
+        setLastDateCursor(null);
+        setLastCreatedAtCursor(null);
+        setHasMore(false);
+      }
     } catch (err) {
-      console.error(err);
+      console.error("Error loading transactions first page", err);
     } finally {
       setIsLoading(false);
       setRefreshing(false);
     }
   };
 
+  const loadNextPage = async () => {
+    if (isFetchingMore || !hasMore || !user || !lastDateCursor || !lastCreatedAtCursor) return;
+    setIsFetchingMore(true);
+
+    try {
+      const query = buildQuery(lastDateCursor, lastCreatedAtCursor);
+      if (!query) return;
+
+      const { data, error } = await query;
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        setTransactions((prev) => [...prev, ...data]);
+
+        if (data.length === PAGE_SIZE) {
+          const lastItem = data[data.length - 1];
+          setLastDateCursor(lastItem.date);
+          setLastCreatedAtCursor(lastItem.created_at);
+          setHasMore(true);
+        } else {
+          setLastDateCursor(null);
+          setLastCreatedAtCursor(null);
+          setHasMore(false);
+        }
+      } else {
+        setHasMore(false);
+      }
+    } catch (err) {
+      console.error("Error loading next page", err);
+    } finally {
+      setIsFetchingMore(false);
+    }
+  };
+
+  // Trigger reloading on query dependencies change
   useFocusEffect(
     useCallback(() => {
-      loadTransactions();
+      setIsLoading(true);
+      loadFirstPage();
     }, [user, typeFilter, selectedCategoryId, dateRange, searchQuery])
   );
 
@@ -147,8 +228,12 @@ export default function TransactionsScreen() {
   }, [user]);
 
   useEffect(() => {
-    const sub1 = DeviceEventEmitter.addListener(EVENTS.TRANSACTION_ADDED, loadTransactions);
-    const sub2 = DeviceEventEmitter.addListener(EVENTS.ACCOUNT_UPDATED, loadTransactions);
+    const sub1 = DeviceEventEmitter.addListener(EVENTS.TRANSACTION_ADDED, () => {
+      loadFirstPage();
+    });
+    const sub2 = DeviceEventEmitter.addListener(EVENTS.ACCOUNT_UPDATED, () => {
+      loadFirstPage();
+    });
     return () => {
       sub1.remove();
       sub2.remove();
@@ -157,16 +242,22 @@ export default function TransactionsScreen() {
 
   const onRefresh = () => {
     setRefreshing(true);
-    loadTransactions();
+    loadFirstPage();
     loadDependencies();
   };
 
   const handleRowPress = (tx: any) => {
+    if (activeSwipeableRef.current) {
+      activeSwipeableRef.current.close();
+    }
     setSelectedTransaction(tx);
     setDetailModalVisible(true);
   };
 
   const handleDeleteTransaction = (tx: any) => {
+    if (activeSwipeableRef.current) {
+      activeSwipeableRef.current.close();
+    }
     Alert.alert(
       "Delete Transaction",
       "Are you sure you want to delete this transaction? The account balance will be atomically reverted.",
@@ -208,82 +299,183 @@ export default function TransactionsScreen() {
     );
   };
 
-  if (isLoading) {
+  const renderItem = ({ item }: { item: any }) => {
+    const isIncome = item.type === "income";
+    const isExpense = item.type === "expense";
+    let swipeableRef: any = null;
+    
     return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background }}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
-    );
-  }
-
-  return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
-      {/* Header and Filter Controls */}
-      <View style={[styles.headerContainer, { borderBottomColor: colors.border }]}>
-        <View style={styles.titleRow}>
-          <Text style={[styles.titleText, { color: colors.text }]}>Transactions</Text>
-          <TouchableOpacity onPress={() => setShowAdvancedFilters(!showAdvancedFilters)}>
-            <SlidersHorizontal color={showAdvancedFilters ? colors.primary : colors.textMuted} size={20} />
-          </TouchableOpacity>
-        </View>
-
-        {/* Search Bar */}
-        <View style={[styles.searchBar, { backgroundColor: 'rgba(255,255,255,0.05)', borderColor: colors.border }]}>
-          <Search color={colors.textMuted} size={18} style={styles.searchIcon} />
-          <TextInput
-            style={[styles.searchInput, { color: colors.text }]}
-            placeholder="Search transactions..."
-            placeholderTextColor={colors.textMuted}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-          />
-        </View>
-
-        {/* Pill filter list (Type) */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pillScroll}>
-          {(["all", "expense", "income", "transfer"] as const).map((type) => {
-            const isSelected = typeFilter === type;
-            return (
-              <TouchableOpacity
-                key={type}
-                onPress={() => {
-                  setTypeFilter(type);
-                  setSelectedCategoryId(null); // Reset category if switching types
-                }}
-                style={[
-                  styles.typePill,
-                  {
-                    borderColor: isSelected ? colors.primary : colors.border,
-                    backgroundColor: isSelected ? 'rgba(16, 185, 129, 0.1)' : 'transparent',
-                  }
-                ]}
-              >
-                <Text style={{ color: isSelected ? colors.primary : colors.text, fontFamily: 'Manrope_500Medium', textTransform: 'capitalize' }}>
-                  {type}
+      <Swipeable 
+        ref={ref => { swipeableRef = ref; }}
+        renderRightActions={() => renderRightActions(item)}
+        overshootRight={false}
+        onSwipeableWillOpen={() => {
+          if (activeSwipeableRef.current && activeSwipeableRef.current !== swipeableRef) {
+            activeSwipeableRef.current.close();
+          }
+          activeSwipeableRef.current = swipeableRef;
+        }}
+      >
+        <TouchableOpacity activeOpacity={0.8} onPress={() => handleRowPress(item)}>
+          <GlassCard style={styles.cardItem}>
+            <View style={styles.cardLeft}>
+              <View style={[
+                styles.iconCircle, 
+                { backgroundColor: isIncome ? 'rgba(16, 185, 129, 0.1)' : isExpense ? 'rgba(239, 68, 68, 0.1)' : 'rgba(59, 130, 246, 0.1)' }
+              ]}>
+                {isIncome ? <ArrowDownLeft color="#10b981" size={20} /> :
+                 isExpense ? <ArrowUpRight color="#ef4444" size={20} /> :
+                 <ArrowLeftRight color="#3b82f6" size={20} />}
+              </View>
+              
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.descText, { color: colors.text }]} numberOfLines={1}>
+                  {item.description || item.category?.name || (item.type === "transfer" ? "Transfer" : "Transaction")}
                 </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
+                <View style={styles.subtextRow}>
+                  <Text style={{ color: colors.textMuted, fontSize: 12, fontFamily: 'Manrope_400Regular' }}>
+                    {item.account?.name}
+                  </Text>
+                  {item.type === "transfer" && item.transfer_to_account?.name && (
+                    <Text style={{ color: colors.textMuted, fontSize: 12, fontFamily: 'Manrope_400Regular' }}>
+                      {" ➔ "}{item.transfer_to_account.name}
+                    </Text>
+                  )}
+                  {item.category?.name && item.type !== "transfer" && (
+                    <Text style={{ color: colors.textMuted, fontSize: 12, fontFamily: 'Manrope_400Regular' }}>
+                      {" • "}{item.category.name}
+                    </Text>
+                  )}
+                </View>
+              </View>
+            </View>
 
-        {/* Advanced Filters (Category, Date Range) */}
-        {showAdvancedFilters && (
-          <View style={[styles.advancedContainer, { borderTopColor: colors.border }]}>
-            {/* Date Range Selection */}
+            <View style={styles.cardRight}>
+              <Text style={[
+                styles.amountVal, 
+                { color: isIncome ? '#10b981' : isExpense ? '#ef4444' : '#3b82f6' }
+              ]}>
+                {isIncome ? '+' : isExpense ? '-' : ''}
+                {formatCurrency(Number(item.amount))}
+              </Text>
+              <Text style={{ color: colors.textMuted, fontSize: 11, fontFamily: 'Manrope_400Regular', marginTop: 4 }}>
+                {new Date(item.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+              </Text>
+            </View>
+          </GlassCard>
+        </TouchableOpacity>
+      </Swipeable>
+    );
+  };
+
+  const renderHeader = () => (
+    <View style={[styles.headerContainer, { borderBottomColor: colors.border }]}>
+      <View style={styles.titleRow}>
+        <Text style={[styles.titleText, { color: colors.text }]}>Transactions</Text>
+        <TouchableOpacity onPress={() => setShowAdvancedFilters(!showAdvancedFilters)}>
+          <SlidersHorizontal color={showAdvancedFilters ? colors.primary : colors.textMuted} size={20} />
+        </TouchableOpacity>
+      </View>
+
+      {/* Search Bar */}
+      <View style={[styles.searchBar, { backgroundColor: 'rgba(255,255,255,0.05)', borderColor: colors.border }]}>
+        <Search color={colors.textMuted} size={18} style={styles.searchIcon} />
+        <TextInput
+          style={[styles.searchInput, { color: colors.text }]}
+          placeholder="Search transactions..."
+          placeholderTextColor={colors.textMuted}
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+        />
+      </View>
+
+      {/* Pill filter list (Type) */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pillScroll}>
+        {(["all", "expense", "income", "transfer"] as const).map((type) => {
+          const isSelected = typeFilter === type;
+          return (
+            <TouchableOpacity
+              key={type}
+              onPress={() => {
+                setTypeFilter(type);
+                setSelectedCategoryId(null); // Reset category if switching types
+              }}
+              style={[
+                styles.typePill,
+                {
+                  borderColor: isSelected ? colors.primary : colors.border,
+                  backgroundColor: isSelected ? 'rgba(16, 185, 129, 0.1)' : 'transparent',
+                }
+              ]}
+            >
+              <Text style={{ color: isSelected ? colors.primary : colors.text, fontFamily: 'Manrope_500Medium', textTransform: 'capitalize' }}>
+                {type}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+
+      {/* Advanced Filters (Category, Date Range) */}
+      {showAdvancedFilters && (
+        <View style={[styles.advancedContainer, { borderTopColor: colors.border }]}>
+          {/* Date Range Selection */}
+          <View style={styles.filterSection}>
+            <Text style={[styles.filterLabel, { color: colors.textMuted }]}>Date Range</Text>
+            <View style={styles.filterRow}>
+              {([
+                { id: "all", label: "All Time" },
+                { id: "today", label: "Today" },
+                { id: "week", label: "This Week" },
+                { id: "month", label: "This Month" }
+              ] as const).map((range) => {
+                const isSelected = dateRange === range.id;
+                return (
+                  <TouchableOpacity
+                    key={range.id}
+                    onPress={() => setDateRange(range.id)}
+                    style={[
+                      styles.subPill,
+                      {
+                        borderColor: isSelected ? colors.primary : colors.border,
+                        backgroundColor: isSelected ? 'rgba(16, 185, 129, 0.1)' : 'transparent',
+                      }
+                    ]}
+                  >
+                    <Text style={{ color: isSelected ? colors.primary : colors.text, fontSize: 12, fontFamily: 'Manrope_500Medium' }}>
+                      {range.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+
+          {/* Category selection */}
+          {typeFilter !== "transfer" && (
             <View style={styles.filterSection}>
-              <Text style={[styles.filterLabel, { color: colors.textMuted }]}>Date Range</Text>
-              <View style={styles.filterRow}>
-                {([
-                  { id: "all", label: "All Time" },
-                  { id: "today", label: "Today" },
-                  { id: "week", label: "This Week" },
-                  { id: "month", label: "This Month" }
-                ] as const).map((range) => {
-                  const isSelected = dateRange === range.id;
+              <Text style={[styles.filterLabel, { color: colors.textMuted }]}>Categories</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterRowScroll}>
+                <TouchableOpacity
+                  onPress={() => setSelectedCategoryId(null)}
+                  style={[
+                    styles.subPill,
+                    {
+                      borderColor: !selectedCategoryId ? colors.primary : colors.border,
+                      backgroundColor: !selectedCategoryId ? 'rgba(16, 185, 129, 0.1)' : 'transparent',
+                    }
+                  ]}
+                >
+                  <Text style={{ color: !selectedCategoryId ? colors.primary : colors.text, fontSize: 12, fontFamily: 'Manrope_500Medium' }}>
+                    All Categories
+                  </Text>
+                </TouchableOpacity>
+                {categories.map((cat) => {
+                  const isSelected = selectedCategoryId === cat.id;
                   return (
                     <TouchableOpacity
-                      key={range.id}
-                      onPress={() => setDateRange(range.id)}
+                      key={cat.id}
+                      onPress={() => setSelectedCategoryId(cat.id)}
                       style={[
                         styles.subPill,
                         {
@@ -293,138 +485,54 @@ export default function TransactionsScreen() {
                       ]}
                     >
                       <Text style={{ color: isSelected ? colors.primary : colors.text, fontSize: 12, fontFamily: 'Manrope_500Medium' }}>
-                        {range.label}
+                        {cat.name}
                       </Text>
                     </TouchableOpacity>
                   );
                 })}
-              </View>
-            </View>
-
-            {/* Category selection (only visible when typeFilter is not 'transfer') */}
-            {typeFilter !== "transfer" && (
-              <View style={styles.filterSection}>
-                <Text style={[styles.filterLabel, { color: colors.textMuted }]}>Categories</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterRowScroll}>
-                  <TouchableOpacity
-                    onPress={() => setSelectedCategoryId(null)}
-                    style={[
-                      styles.subPill,
-                      {
-                        borderColor: !selectedCategoryId ? colors.primary : colors.border,
-                        backgroundColor: !selectedCategoryId ? 'rgba(16, 185, 129, 0.1)' : 'transparent',
-                      }
-                    ]}
-                  >
-                    <Text style={{ color: !selectedCategoryId ? colors.primary : colors.text, fontSize: 12, fontFamily: 'Manrope_500Medium' }}>
-                      All Categories
-                    </Text>
-                  </TouchableOpacity>
-                  {categories.map((cat) => {
-                    const isSelected = selectedCategoryId === cat.id;
-                    return (
-                      <TouchableOpacity
-                        key={cat.id}
-                        onPress={() => setSelectedCategoryId(cat.id)}
-                        style={[
-                          styles.subPill,
-                          {
-                            borderColor: isSelected ? colors.primary : colors.border,
-                            backgroundColor: isSelected ? 'rgba(16, 185, 129, 0.1)' : 'transparent',
-                          }
-                        ]}
-                      >
-                        <Text style={{ color: isSelected ? colors.primary : colors.text, fontSize: 12, fontFamily: 'Manrope_500Medium' }}>
-                          {cat.name}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </ScrollView>
-              </View>
-            )}
-          </View>
-        )}
-      </View>
-
-      {/* Transaction List */}
-      <ScrollView
-        style={{ flex: 1 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
-      >
-        <View style={{ padding: 20 }}>
-          {transactions.map((tx) => {
-            const isIncome = tx.type === "income";
-            const isExpense = tx.type === "expense";
-            
-            return (
-              <Swipeable 
-                key={tx.id} 
-                renderRightActions={() => renderRightActions(tx)}
-                overshootRight={false}
-              >
-                <TouchableOpacity activeOpacity={0.8} onPress={() => handleRowPress(tx)}>
-                  <GlassCard style={styles.cardItem}>
-                    <View style={styles.cardLeft}>
-                      <View style={[
-                        styles.iconCircle, 
-                        { backgroundColor: isIncome ? 'rgba(16, 185, 129, 0.1)' : isExpense ? 'rgba(239, 68, 68, 0.1)' : 'rgba(59, 130, 246, 0.1)' }
-                      ]}>
-                        {isIncome ? <ArrowDownLeft color="#10b981" size={20} /> :
-                         isExpense ? <ArrowUpRight color="#ef4444" size={20} /> :
-                         <ArrowLeftRight color="#3b82f6" size={20} />}
-                      </View>
-                      
-                      <View style={{ flex: 1 }}>
-                        <Text style={[styles.descText, { color: colors.text }]} numberOfLines={1}>
-                          {tx.description || tx.category?.name || (tx.type === "transfer" ? "Transfer" : "Transaction")}
-                        </Text>
-                        <View style={styles.subtextRow}>
-                          <Text style={{ color: colors.textMuted, fontSize: 12, fontFamily: 'Manrope_400Regular' }}>
-                            {tx.account?.name}
-                          </Text>
-                          {tx.type === "transfer" && tx.transfer_to_account?.name && (
-                            <Text style={{ color: colors.textMuted, fontSize: 12, fontFamily: 'Manrope_400Regular' }}>
-                              {" ➔ "}{tx.transfer_to_account.name}
-                            </Text>
-                          )}
-                          {tx.category?.name && tx.type !== "transfer" && (
-                            <Text style={{ color: colors.textMuted, fontSize: 12, fontFamily: 'Manrope_400Regular' }}>
-                              {" • "}{tx.category.name}
-                            </Text>
-                          )}
-                        </View>
-                      </View>
-                    </View>
-
-                    <View style={styles.cardRight}>
-                      <Text style={[
-                        styles.amountVal, 
-                        { color: isIncome ? '#10b981' : isExpense ? '#ef4444' : '#3b82f6' }
-                      ]}>
-                        {isIncome ? '+' : isExpense ? '-' : ''}
-                        {formatCurrency(Number(tx.amount))}
-                      </Text>
-                      <Text style={{ color: colors.textMuted, fontSize: 11, fontFamily: 'Manrope_400Regular', marginTop: 4 }}>
-                        {new Date(tx.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                      </Text>
-                    </View>
-                  </GlassCard>
-                </TouchableOpacity>
-              </Swipeable>
-            );
-          })}
-
-          {transactions.length === 0 && (
-            <View style={styles.emptyView}>
-              <ArrowLeftRight color={colors.border} size={48} />
-              <Text style={{ color: colors.textMuted, fontFamily: 'Manrope_500Medium', marginTop: 16 }}>
-                No transactions found.
-              </Text>
+              </ScrollView>
             </View>
           )}
         </View>
-      </ScrollView>
+      )}
+    </View>
+  );
+
+  const renderFooter = () => {
+    if (!isFetchingMore) return null;
+    return (
+      <View style={{ paddingVertical: 20 }}>
+        <ActivityIndicator size="small" color={colors.primary} />
+      </View>
+    );
+  };
+
+  const renderEmpty = () => {
+    if (isLoading) return null;
+    return (
+      <View style={styles.emptyView}>
+        <ArrowLeftRight color={colors.border} size={48} />
+        <Text style={{ color: colors.textMuted, fontFamily: 'Manrope_500Medium', marginTop: 16 }}>
+          No transactions found.
+        </Text>
+      </View>
+    );
+  };
+
+  return (
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <FlatList
+        data={transactions}
+        renderItem={renderItem}
+        keyExtractor={(item) => item.id}
+        ListHeaderComponent={renderHeader}
+        ListFooterComponent={renderFooter}
+        ListEmptyComponent={renderEmpty}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+        onEndReached={loadNextPage}
+        onEndReachedThreshold={0.2}
+        contentContainerStyle={{ paddingBottom: 40 }}
+      />
 
       {/* Transaction Detail & Edit Modal */}
       <TransactionDetailModal
@@ -437,7 +545,7 @@ export default function TransactionsScreen() {
 }
 
 const styles = StyleSheet.create({
-  headerContainer: { padding: 24, paddingTop: 64, borderBottomWidth: 1 },
+  headerContainer: { padding: 24, paddingTop: 64, borderBottomWidth: 1, marginBottom: 16 },
   titleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
   titleText: { fontFamily: 'BricolageGrotesque_700Bold', fontSize: 30 },
   searchBar: { flexDirection: 'row', alignItems: 'center', height: 48, borderRadius: 12, borderWidth: 1, paddingHorizontal: 12, marginBottom: 16 },
@@ -451,13 +559,13 @@ const styles = StyleSheet.create({
   filterRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   filterRowScroll: { flexDirection: 'row' },
   subPill: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, borderWidth: 1, marginRight: 8 },
-  cardItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, marginBottom: 8 },
+  cardItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, marginHorizontal: 20, marginBottom: 8 },
   cardLeft: { flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 12 },
   iconCircle: { padding: 10, borderRadius: 999, marginRight: 12 },
   descText: { fontFamily: 'BricolageGrotesque_700Bold', fontSize: 16, marginBottom: 4 },
   subtextRow: { flexDirection: 'row', alignItems: 'center' },
   cardRight: { alignItems: 'flex-end' },
   amountVal: { fontFamily: 'BricolageGrotesque_700Bold', fontSize: 16 },
-  deleteAction: { width: 80, height: '90%', justifyContent: 'center', alignItems: 'center', borderRadius: 16, alignSelf: 'center', marginBottom: 8 },
+  deleteAction: { width: 80, height: '90%', justifyContent: 'center', alignItems: 'center', borderRadius: 16, alignSelf: 'center', marginBottom: 8, marginRight: 20 },
   emptyView: { paddingVertical: 80, alignItems: 'center', justifyContent: 'center' }
 });

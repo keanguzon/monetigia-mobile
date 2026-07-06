@@ -1,5 +1,6 @@
 -- Run this in the Supabase SQL Editor to create the delete_transaction_atomic RPC.
 -- This function deletes a transaction and atomically updates the linked account balances.
+-- It features deterministic locking order by UUID comparison to prevent deadlocks on concurrent opposed transfers.
 
 CREATE OR REPLACE FUNCTION delete_transaction_atomic(
   p_transaction_id UUID,
@@ -24,10 +25,17 @@ BEGIN
     RAISE EXCEPTION 'Transaction not found or unauthorized';
   END IF;
 
-  -- 2. Fetch account types
-  SELECT type INTO v_account_type FROM accounts WHERE id = v_account_id FOR UPDATE;
-  IF v_transfer_to_account_id IS NOT NULL THEN
-    SELECT type INTO v_transfer_to_account_type FROM accounts WHERE id = v_transfer_to_account_id FOR UPDATE;
+  -- 2. Fetch account types with deterministic locking order to prevent deadlocks
+  IF v_transfer_to_account_id IS NULL THEN
+    SELECT type INTO v_account_type FROM accounts WHERE id = v_account_id FOR UPDATE;
+  ELSE
+    IF v_account_id < v_transfer_to_account_id THEN
+      SELECT type INTO v_account_type FROM accounts WHERE id = v_account_id FOR UPDATE;
+      SELECT type INTO v_transfer_to_account_type FROM accounts WHERE id = v_transfer_to_account_id FOR UPDATE;
+    ELSE
+      SELECT type INTO v_transfer_to_account_type FROM accounts WHERE id = v_transfer_to_account_id FOR UPDATE;
+      SELECT type INTO v_account_type FROM accounts WHERE id = v_account_id FOR UPDATE;
+    END IF;
   END IF;
 
   -- 3. Delete the transaction
