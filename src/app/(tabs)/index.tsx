@@ -1,6 +1,7 @@
 import { useCallback, useState, useEffect } from "react";
 import { View, Text, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity } from "react-native";
 import { getSupabase } from "../../../lib/supabase";
+import { LineChart } from "react-native-gifted-charts";
 import { Wallet, ArrowDownLeft, ArrowUpRight, ArrowLeftRight } from "lucide-react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { useSession } from "../_layout";
@@ -24,6 +25,9 @@ export default function DashboardScreen() {
   const [monthlyIncome, setMonthlyIncome] = useState(0);
   const [monthlyExpense, setMonthlyExpense] = useState(0);
   const [recentTransactions, setRecentTransactions] = useState<any[]>([]);
+  const [chartIncome, setChartIncome] = useState<any[]>([]);
+  const [chartExpense, setChartExpense] = useState<any[]>([]);
+  const [chartLabels, setChartLabels] = useState<string[]>([]);
   const router = useRouter();
   const { user } = useSession();
   const { colors } = useTheme();
@@ -76,6 +80,50 @@ export default function DashboardScreen() {
           if (t.type === "expense") expense += Number(t.amount || 0);
         });
         setRecentTransactions(transactions.slice(0, 5));
+        
+        // --- NEW: Process data for Daily Trends Chart ---
+        const dailyData: Record<string, { income: number; expense: number }> = {};
+        const pad = (num: number) => String(num).padStart(2, '0');
+        
+        // Initialize the last 7 days to ensure the chart always has a base X-axis even if empty
+        // Use manual local extraction to prevent `.toISOString()` from shifting the date to UTC yesterday.
+        for (let i = 6; i >= 0; i--) {
+          const d = new Date();
+          d.setDate(d.getDate() - i);
+          const dateStr = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+          dailyData[dateStr] = { income: 0, expense: 0 };
+        }
+
+        // Aggregate actual transactions
+        transactions.forEach((t: any) => {
+          if (!t.date) return;
+          // Hydrate UTC string from Supabase back to local Date, then extract local YYYY-MM-DD
+          const localD = new Date(t.date);
+          const dateKey = `${localD.getFullYear()}-${pad(localD.getMonth() + 1)}-${pad(localD.getDate())}`;
+          
+          if (dailyData[dateKey]) {
+            if (t.type === 'income') {
+              dailyData[dateKey].income += Number(t.amount);
+            } else if (t.type === 'expense') {
+              dailyData[dateKey].expense += Number(t.amount);
+            }
+          }
+        });
+
+        const sortedDates = Object.keys(dailyData).sort();
+        // Parse the YYYY-MM-DD string by manually passing parts to Date constructor 
+        // to avoid the 'UTC midnight shift' for western hemisphere users.
+        const formattedLabels = sortedDates.map(d => {
+          const [y, m, day] = d.split('-');
+          return new Date(Number(y), Number(m) - 1, Number(day)).toLocaleDateString('en-US', { weekday: 'short' });
+        });
+        
+        const incomeLine = sortedDates.map(d => ({ value: dailyData[d].income }));
+        const expenseLine = sortedDates.map(d => ({ value: dailyData[d].expense }));
+
+        setChartLabels(formattedLabels);
+        setChartIncome(incomeLine);
+        setChartExpense(expenseLine);
       }
       setMonthlyIncome(income);
       setMonthlyExpense(expense);
@@ -155,6 +203,47 @@ export default function DashboardScreen() {
             <Text style={{ fontFamily: 'BricolageGrotesque_700Bold', fontSize: 20, color: "#ef4444" }}>
               {formatCurrency(monthlyExpense)}
             </Text>
+          </GlassCard>
+        </View>
+
+        {/* Visual Analytics Chart (PC Parity) */}
+        <View style={{ marginBottom: 32 }}>
+          <Text style={{ fontFamily: 'BricolageGrotesque_700Bold', fontSize: 20, color: colors.text, marginBottom: 16 }}>Daily Trends</Text>
+          <GlassCard style={{ padding: 16, paddingBottom: 24 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 16, marginBottom: 24 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#10b981' }} />
+                <Text style={{ fontFamily: 'Manrope_500Medium', color: colors.textMuted, fontSize: 12 }}>Income</Text>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#ef4444' }} />
+                <Text style={{ fontFamily: 'Manrope_500Medium', color: colors.textMuted, fontSize: 12 }}>Expense</Text>
+              </View>
+            </View>
+            <LineChart
+              data={chartIncome}
+              data2={chartExpense}
+              color1="#10b981"
+              color2="#ef4444"
+              dataPointsColor1="#10b981"
+              dataPointsColor2="#ef4444"
+              areaChart
+              startFillColor1="#10b981"
+              startFillColor2="#ef4444"
+              startOpacity={0.2}
+              endOpacity={0.05}
+              curved
+              thickness={2}
+              hideRules
+              hideYAxisText
+              yAxisThickness={0}
+              xAxisThickness={0}
+              initialSpacing={10}
+              spacing={45}
+              dataPointsRadius={3}
+              xAxisLabelTexts={chartLabels}
+              xAxisLabelTextStyle={{ color: colors.textMuted, fontFamily: 'Manrope_500Medium', fontSize: 10, textAlign: 'center' }}
+            />
           </GlassCard>
         </View>
 
