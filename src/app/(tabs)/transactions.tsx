@@ -51,6 +51,9 @@ export default function TransactionsScreen() {
   // Active Swipeable ref to close them on interaction
   const activeSwipeableRef = useRef<any>(null);
 
+  // Concurrency lock to prevent double-fetch race conditions
+  const isFetchingFirstPageRef = useRef(false);
+
   const toLocalISOWithOffset = (d: Date) => {
     const offset = -d.getTimezoneOffset();
     const absOffset = Math.abs(offset);
@@ -153,7 +156,8 @@ export default function TransactionsScreen() {
   }, [user, typeFilter, selectedCategoryId, dateRange, searchQuery]);
 
   const loadFirstPage = async () => {
-    if (!user) return;
+    if (!user || isFetchingFirstPageRef.current) return;
+    isFetchingFirstPageRef.current = true;
     try {
       const query = buildQuery(null, null);
       if (!query) return;
@@ -178,6 +182,7 @@ export default function TransactionsScreen() {
     } finally {
       setIsLoading(false);
       setRefreshing(false);
+      isFetchingFirstPageRef.current = false;
     }
   };
 
