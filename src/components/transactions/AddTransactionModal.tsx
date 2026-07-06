@@ -77,7 +77,7 @@ export const AddTransactionModal: React.FC<Props> = ({ visible, onClose }) => {
     try {
       if (!user) return;
       const [accRes, catRes] = await Promise.all([
-        getSupabase().from('accounts').select('id, name, balance').eq('user_id', user.id),
+        getSupabase().from('accounts').select('id, name, balance').eq('user_id', user.id).neq('include_in_networth', false),
         getSupabase().from('categories').select('id, name, type').eq('user_id', user.id)
       ]);
 
@@ -247,12 +247,14 @@ export const AddTransactionModal: React.FC<Props> = ({ visible, onClose }) => {
                 >
                   <Text style={[styles.typeText, { color: type === 'income' ? '#fff' : colors.textMuted }]}>Income</Text>
                 </TouchableOpacity>
-                <TouchableOpacity 
-                  style={[styles.typeBtn, type === 'transfer' ? { backgroundColor: '#3b82f6' } : undefined]}
-                  onPress={() => setType('transfer')}
-                >
-                  <Text style={[styles.typeText, { color: type === 'transfer' ? '#fff' : colors.textMuted }]}>Transfer</Text>
-                </TouchableOpacity>
+                {accounts.length >= 2 && (
+                  <TouchableOpacity 
+                    style={[styles.typeBtn, type === 'transfer' ? { backgroundColor: '#3b82f6' } : undefined]}
+                    onPress={() => setType('transfer')}
+                  >
+                    <Text style={[styles.typeText, { color: type === 'transfer' ? '#fff' : colors.textMuted }]}>Transfer</Text>
+                  </TouchableOpacity>
+                )}
               </View>
 
               {/* Amount Input */}
