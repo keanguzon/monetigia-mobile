@@ -49,6 +49,7 @@ export default function RootLayout() {
       );
       subscription = sub;
     } catch (err: any) {
+      console.error("Supabase init failed:", err.message);
       setInitError(err.message);
       setInitialized(true);
     }
@@ -79,8 +80,8 @@ export default function RootLayout() {
   if (initError) {
     return (
       <View className="flex-1 items-center justify-center bg-slate-950 p-6">
-        <Text className="text-red-400 text-center font-medium text-lg mb-2">Configuration Error</Text>
-        <Text className="text-slate-400 text-center text-sm">{initError}</Text>
+        <Text className="text-red-400 text-center font-medium text-lg mb-2">Unable to connect</Text>
+        <Text className="text-slate-400 text-center text-sm">Please check your network and update the app.</Text>
       </View>
     );
   }
@@ -88,9 +89,8 @@ export default function RootLayout() {
   return (
     <SessionContext.Provider value={{ session, user: session?.user ?? null }}>
       <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="login" />
         <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="index" />
+        <Stack.Screen name="login" />
       </Stack>
     </SessionContext.Provider>
   );

@@ -78,7 +78,7 @@ export default function DashboardScreen() {
   useFocusEffect(
     useCallback(() => {
       loadData();
-    }, [])
+    }, [user])
   );
 
   const onRefresh = () => {

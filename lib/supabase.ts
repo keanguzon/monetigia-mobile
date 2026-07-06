@@ -54,7 +54,10 @@ class LargeSecureStore {
   async setItem(key: string, value: string) {
     try {
       await this._encrypt(key, value);
-    } catch (e) {}
+    } catch (e) {
+      console.error('LargeSecureStore.setItem failed:', e);
+      throw e;
+    }
   }
 }
 

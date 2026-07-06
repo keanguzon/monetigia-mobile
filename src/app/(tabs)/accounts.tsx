@@ -64,7 +64,7 @@ export default function AccountsScreen() {
 
   useEffect(() => {
     loadAccounts();
-  }, []);
+  }, [user]);
 
   const onRefresh = () => {
     setRefreshing(true);

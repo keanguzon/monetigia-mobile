@@ -44,7 +44,7 @@ export default function TransactionsScreen() {
 
   useEffect(() => {
     loadTransactions();
-  }, []);
+  }, [user]);
 
   const onRefresh = () => {
     setRefreshing(true);
