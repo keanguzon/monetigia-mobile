@@ -1,8 +1,9 @@
 import { useCallback, useState } from "react";
 import { View, Text, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity } from "react-native";
-import { supabase } from "../../../lib/supabase";
+import { getSupabase } from "../../../lib/supabase";
 import { Wallet, ArrowDownLeft, ArrowUpRight, ArrowLeftRight } from "lucide-react-native";
 import { useRouter, useFocusEffect } from "expo-router";
+import { useSession } from "../_layout";
 
 // Utility formatting
 const formatCurrency = (amount: number) => {
@@ -20,14 +21,14 @@ export default function DashboardScreen() {
   const [monthlyExpense, setMonthlyExpense] = useState(0);
   const [recentTransactions, setRecentTransactions] = useState<any[]>([]);
   const router = useRouter();
+  const { user } = useSession();
 
   const loadData = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
       // 1. Fetch Accounts for Total Balance
-      const { data: accounts } = await supabase
+      const { data: accounts } = await getSupabase()
         .from("accounts")
         .select("balance, type, include_in_networth")
         .eq("user_id", user.id)
@@ -36,7 +37,7 @@ export default function DashboardScreen() {
       
       const total = (accounts || []).reduce((acc: number, curr: any) => acc + Number(curr.balance || 0), 0);
       
-      const { data: debt } = await supabase.rpc("get_total_credit_card_debt", { p_user_id: user.id });
+      const { data: debt } = await getSupabase().rpc("get_total_credit_card_debt", { p_user_id: user.id });
       const totalDebt = Number(debt || 0);
       
       setTotalBalance(total - totalDebt);
@@ -46,7 +47,7 @@ export default function DashboardScreen() {
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
       const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).toISOString();
 
-      const { data: transactions } = await supabase
+      const { data: transactions } = await getSupabase()
         .from("transactions")
         .select("amount, type, date, description, category:categories(name)")
         .eq("user_id", user.id)

@@ -1,31 +1,59 @@
 import "../../global.css";
-import { useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import { Stack, useRouter, useSegments } from "expo-router";
-import { supabase } from "../../lib/supabase";
-import { Session } from "@supabase/supabase-js";
-import { View, ActivityIndicator } from "react-native";
+import { getSupabase } from "../../lib/supabase";
+import { Session, User } from "@supabase/supabase-js";
+import { View, ActivityIndicator, Text } from "react-native";
+
+type SessionContextType = {
+  session: Session | null;
+  user: User | null;
+};
+
+const SessionContext = createContext<SessionContextType>({
+  session: null,
+  user: null,
+});
+
+export function useSession() {
+  return useContext(SessionContext);
+}
 
 export default function RootLayout() {
   const [session, setSession] = useState<Session | null>(null);
   const [initialized, setInitialized] = useState(false);
+  const [initError, setInitError] = useState<string | null>(null);
   const segments = useSegments();
   const router = useRouter();
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
+    let subscription: { unsubscribe: () => void } | null = null;
+
+    try {
+      const supabase = getSupabase();
+
+      supabase.auth.getSession()
+        .then(({ data: { session } }) => {
+          setSession(session);
+          setInitialized(true);
+        })
+        .catch((err) => {
+          setSession(null);
+          setInitialized(true);
+        });
+
+      const { data: { subscription: sub } } = supabase.auth.onAuthStateChange(
+        (_event, session) => {
+          setSession(session);
+        }
+      );
+      subscription = sub;
+    } catch (err: any) {
+      setInitError(err.message);
       setInitialized(true);
-    });
+    }
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        setSession(session);
-      }
-    );
-
-    return () => {
-      subscription.unsubscribe();
-    };
+    return () => subscription?.unsubscribe();
   }, []);
 
   useEffect(() => {
@@ -33,14 +61,12 @@ export default function RootLayout() {
 
     const inAuthGroup = segments[0] === "(tabs)";
 
-    if (!session && inAuthGroup) {
-      // Redirect to login if unauthenticated but trying to access tabs
+    if ((!session || initError) && inAuthGroup) {
       router.replace("/login");
-    } else if (session && !inAuthGroup) {
-      // Redirect to tabs if authenticated but on login screen
+    } else if (session && !initError && !inAuthGroup) {
       router.replace("/(tabs)");
     }
-  }, [session, initialized, segments]);
+  }, [session, initialized, segments, initError]);
 
   if (!initialized) {
     return (
@@ -50,10 +76,22 @@ export default function RootLayout() {
     );
   }
 
+  if (initError) {
+    return (
+      <View className="flex-1 items-center justify-center bg-slate-950 p-6">
+        <Text className="text-red-400 text-center font-medium text-lg mb-2">Configuration Error</Text>
+        <Text className="text-slate-400 text-center text-sm">{initError}</Text>
+      </View>
+    );
+  }
+
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="login" />
-      <Stack.Screen name="(tabs)" />
-    </Stack>
+    <SessionContext.Provider value={{ session, user: session?.user ?? null }}>
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="login" />
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="index" />
+      </Stack>
+    </SessionContext.Provider>
   );
 }

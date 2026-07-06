@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { View, Text, TouchableOpacity, ActivityIndicator } from "react-native";
-import { supabase } from "../../lib/supabase";
+import { getSupabase } from "../../lib/supabase";
 import * as WebBrowser from "expo-web-browser";
 import { makeRedirectUri } from "expo-auth-session";
 import * as Linking from "expo-linking";
@@ -11,42 +11,44 @@ WebBrowser.maybeCompleteAuthSession();
 export default function LoginScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+  const sessionSetRef = useRef(false);
 
   const redirectTo = makeRedirectUri({
     scheme: "monetigia",
     path: "auth/callback"
   });
 
-  useEffect(() => {
-    const handleDeepLink = async (event: { url: string }) => {
-      try {
-        const { params, errorCode } = QueryParams.getQueryParams(event.url);
-        
-        if (errorCode) throw new Error(errorCode);
-        const { access_token, refresh_token } = params;
-        
-        if (access_token && refresh_token) {
-          await supabase.auth.setSession({ access_token, refresh_token });
-        }
-      } catch (err: any) {
-        setErrorMsg(err.message || "Failed to parse auth token");
+  const handleTokens = async (url: string) => {
+    if (sessionSetRef.current) return;
+    
+    try {
+      const { params, errorCode } = QueryParams.getQueryParams(url);
+      if (errorCode) throw new Error(errorCode);
+      
+      const { access_token, refresh_token } = params;
+      if (access_token && refresh_token) {
+        sessionSetRef.current = true;
+        await getSupabase().auth.setSession({ access_token, refresh_token });
       }
-    };
+    } catch (err: any) {
+      setErrorMsg(err.message || "Failed to parse auth token");
+    }
+  };
 
-    const subscription = Linking.addEventListener("url", handleDeepLink);
+  useEffect(() => {
+    const subscription = Linking.addEventListener("url", (e) => handleTokens(e.url));
     return () => subscription.remove();
   }, []);
 
   const handleOAuthLogin = async (provider: "google" | "facebook") => {
+    sessionSetRef.current = false;
     setIsLoading(true);
     setErrorMsg("");
+
     try {
-      const { data, error } = await supabase.auth.signInWithOAuth({
+      const { data, error } = await getSupabase().auth.signInWithOAuth({
         provider,
-        options: {
-          redirectTo,
-          skipBrowserRedirect: true,
-        },
+        options: { redirectTo, skipBrowserRedirect: true },
       });
 
       if (error) throw error;
@@ -54,13 +56,7 @@ export default function LoginScreen() {
       if (data?.url) {
         const res = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
         if (res.type === "success" && res.url) {
-          // WebBrowser might catch it before Linking listener
-          const { params, errorCode } = QueryParams.getQueryParams(res.url);
-          if (errorCode) throw new Error(errorCode);
-          const { access_token, refresh_token } = params;
-          if (access_token && refresh_token) {
-            await supabase.auth.setSession({ access_token, refresh_token });
-          }
+          await handleTokens(res.url);
         }
       }
     } catch (err: any) {
@@ -75,9 +71,7 @@ export default function LoginScreen() {
       <View className="w-full max-w-sm p-6 bg-slate-900 border border-slate-800 rounded-2xl shadow-xl">
         <View className="mb-8">
           <Text className="text-3xl font-bold text-center text-white mb-2">Monetigia</Text>
-          <Text className="text-slate-400 text-center">
-            Continue with OAuth to access your dashboard
-          </Text>
+          <Text className="text-slate-400 text-center">Continue with OAuth to access your dashboard</Text>
         </View>
 
         {errorMsg ? (

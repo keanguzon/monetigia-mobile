@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { View, Text, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity } from "react-native";
-import { supabase } from "../../../lib/supabase";
+import { getSupabase } from "../../../lib/supabase";
 import { ArrowDownLeft, ArrowUpRight, ArrowLeftRight } from "lucide-react-native";
+import { useSession } from "../_layout";
 
 // Utility formatting
 const formatCurrency = (amount: number) => {
@@ -16,13 +17,13 @@ export default function TransactionsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [transactions, setTransactions] = useState<any[]>([]);
   const [filter, setFilter] = useState<"all" | "expense" | "income" | "transfer">("all");
+  const { user } = useSession();
 
   const loadTransactions = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data } = await supabase
+      const { data } = await getSupabase()
         .from("transactions")
         .select("id, type, amount, description, date, category:categories(id,name,color), account:accounts!account_id(id,name,type)")
         .eq("user_id", user.id)

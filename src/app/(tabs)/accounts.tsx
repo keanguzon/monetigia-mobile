@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { View, Text, ScrollView, RefreshControl, ActivityIndicator } from "react-native";
-import { supabase } from "../../../lib/supabase";
+import { getSupabase } from "../../../lib/supabase";
 import { Wallet, Landmark, CreditCard, Building2, TrendingUp, PiggyBank } from "lucide-react-native";
+import { useSession } from "../_layout";
 
 // Utility formatting
 const formatCurrency = (amount: number) => {
@@ -37,13 +38,13 @@ export default function AccountsScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [accounts, setAccounts] = useState<any[]>([]);
+  const { user } = useSession();
 
   const loadAccounts = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data } = await supabase
+      const { data } = await getSupabase()
         .from("accounts")
         .select("*")
         .eq("user_id", user.id)
