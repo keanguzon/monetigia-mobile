@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "monetigia-mobile",
+    "name": "Monetigia",
     "slug": "monetigia-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -17,7 +17,8 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.anonymous.monetigiamobile"
     },
     "web": {
       "output": "static",
@@ -32,11 +33,25 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
         }
-      ]
+      ],
+      "expo-secure-store",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "206282b5-1575-4f20-84c2-485fb45a1d99"
+      }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/206282b5-1575-4f20-84c2-485fb45a1d99"
     }
   }
 }
