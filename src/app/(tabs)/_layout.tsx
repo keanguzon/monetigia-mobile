@@ -1,5 +1,5 @@
 import { Tabs } from "expo-router";
-import { Home, Wallet, ArrowLeftRight } from "lucide-react-native";
+import { Home, Wallet, ArrowLeftRight, User } from "lucide-react-native";
 import { useTheme } from "../../theme/ThemeProvider";
 import { View } from "react-native";
 import { useState } from "react";
@@ -42,6 +42,13 @@ export default function TabLayout() {
         options={{
           title: "Accounts",
           tabBarIcon: ({ color, size }) => <Wallet color={color} size={size} />,
+        }}
+      />
+      <Tabs.Screen
+        name="settings"
+        options={{
+          title: "Settings",
+          tabBarIcon: ({ color, size }) => <User color={color} size={size} />,
         }}
       />
     </Tabs>
