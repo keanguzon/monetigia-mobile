@@ -331,6 +331,7 @@ export default function TransactionsScreen() {
         ref={ref => { swipeableRef = ref; }}
         renderRightActions={() => renderRightActions(item)}
         overshootRight={false}
+        containerStyle={{ width: '100%' }}
         onSwipeableWillOpen={() => {
           if (activeSwipeableRef.current && activeSwipeableRef.current !== swipeableRef) {
             activeSwipeableRef.current.close();

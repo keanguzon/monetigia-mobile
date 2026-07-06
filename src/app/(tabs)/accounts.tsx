@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from "react";
-import { View, Text, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity, Alert, DeviceEventEmitter } from "react-native";
+import { View, Text, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity, Alert, DeviceEventEmitter, Image } from "react-native";
 import { getSupabase } from "../../../lib/supabase";
 import { Wallet, Landmark, CreditCard, Smartphone, TrendingUp, PiggyBank, Plus, ArchiveX } from "lucide-react-native";
 import { useSession } from "../_layout";
@@ -15,7 +15,22 @@ import { useFocusEffect } from "expo-router";
 
 import { formatCurrency } from "../../lib/utils";
 
-const getAccountIcon = (type: string, color: string) => {
+const WALLET_LOGOS: Record<string, any> = {
+  'GCash': require('../../../../assets/images/logos/gcash.png'),
+  'Maya Savings': require('../../../../assets/images/logos/maya.png'),
+  'Maya': require('../../../../assets/images/logos/maya.png'),
+  'GoTyme Savings': require('../../../../assets/images/logos/gotyme.png'),
+  'GoTyme': require('../../../../assets/images/logos/gotyme.png'),
+  'SeaBank Savings': require('../../../../assets/images/logos/seabank.png'),
+  'SeaBank': require('../../../../assets/images/logos/seabank.png'),
+  'SPayLater': require('../../../../assets/images/logos/Spaylater.png'),
+  'Metrobank': require('../../../../assets/images/logos/Metrobank.webp'),
+};
+
+const getAccountIcon = (type: string, color: string, name?: string) => {
+  if (name && WALLET_LOGOS[name]) {
+    return <Image source={WALLET_LOGOS[name]} style={{ width: 24, height: 24, borderRadius: 12 }} resizeMode="contain" />;
+  }
   switch (type) {
     case "cash": return <Wallet color={color} size={24} />;
     case "bank": return <Landmark color={color} size={24} />;
@@ -37,7 +52,7 @@ const getAccountTypeLabel = (type: string) => {
   }
 };
 
-export default function AccountsScreen() {
+export default function WalletsScreen() {
   const { colors } = useTheme();
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -159,7 +174,7 @@ export default function AccountsScreen() {
         <View style={{ padding: 24, paddingTop: 64 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
             <View>
-              <Text style={{ fontFamily: 'BricolageGrotesque_700Bold', fontSize: 30, color: colors.text }}>Accounts</Text>
+              <Text style={{ fontFamily: 'BricolageGrotesque_700Bold', fontSize: 30, color: colors.text }}>Wallets</Text>
               <Text style={{ fontFamily: 'Manrope_400Regular', color: colors.textMuted, marginTop: 4 }}>Your wallets and balances</Text>
             </View>
             <TouchableOpacity onPress={handleAddAccount} style={{ backgroundColor: colors.primary, padding: 12, borderRadius: 999 }}>
@@ -180,7 +195,7 @@ export default function AccountsScreen() {
                       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
                           <View style={{ backgroundColor: 'rgba(34, 197, 94, 0.1)', padding: 12, borderRadius: 999, marginRight: 16 }}>
-                            {getAccountIcon(account.type, colors.primary)}
+                            {getAccountIcon(account.type, colors.primary, account.name)}
                           </View>
                           <View style={{ flex: 1 }}>
                             <Text style={{ fontFamily: 'BricolageGrotesque_700Bold', color: colors.text, fontSize: 18, marginBottom: 4 }}>{account.name}</Text>

@@ -217,6 +217,7 @@ export default function DashboardScreen() {
           <ChevronDown color={colors.text} size={16} />
         </TouchableOpacity>
       </View>
+      <View style={{ paddingHorizontal: 24 }}>
 
         {/* Total Balance Card */}
         <GlassCard style={{ marginBottom: 16, padding: 24 }}>
@@ -356,6 +357,7 @@ export default function DashboardScreen() {
             </View>
           )}
         </GlassCard>
+      </View>
       </ScrollView>
   );
 }

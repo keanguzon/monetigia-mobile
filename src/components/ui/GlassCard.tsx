@@ -16,8 +16,6 @@ export const GlassCard: React.FC<GlassCardProps> = ({ children, glassStyle = 're
       style={[{ 
         borderRadius: 16, 
         overflow: 'hidden', 
-        borderColor: colors.border,
-        borderWidth: 1,
         backgroundColor: colors.card,
         ...(Platform.OS === 'android' ? { elevation: 2 } : {})
       }, style]} 

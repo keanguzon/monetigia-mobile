@@ -51,7 +51,7 @@ export default function TabLayout() {
         <Tabs.Screen
           name="accounts"
           options={{
-            title: "Accounts",
+            title: "Wallets",
             tabBarIcon: ({ color, size }) => <Wallet color={color} size={size} />,
           }}
           listeners={{
