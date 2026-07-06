@@ -8,6 +8,8 @@ interface FABProps {
   onPress: () => void;
 }
 
+const AnimatedTouchableOpacity = Animated.createAnimatedComponent(TouchableOpacity);
+
 export const FAB: React.FC<FABProps> = ({ onPress }) => {
   const { colors } = useTheme();
   const scaleAnim = React.useRef(new Animated.Value(1)).current;
@@ -23,9 +25,6 @@ export const FAB: React.FC<FABProps> = ({ onPress }) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     onPress();
   };
-
-  const AnimatedTouchableOpacity = Animated.createAnimatedComponent(TouchableOpacity);
-
   return (
     <AnimatedTouchableOpacity
       activeOpacity={0.8}

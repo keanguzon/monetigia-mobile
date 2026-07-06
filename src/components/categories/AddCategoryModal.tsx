@@ -114,7 +114,7 @@ export const AddCategoryModal: React.FC<Props> = ({ visible, onClose, initialDat
         style={styles.overlay}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <GlassCard intensity={80} style={styles.card}>
+        <GlassCard style={styles.card}>
           <View style={styles.header}>
             <Text style={[styles.title, { color: colors.text }]}>
               {isEditMode ? 'Edit Category' : 'Add Category'}

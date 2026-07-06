@@ -129,8 +129,6 @@ export const TransactionDetailModal: React.FC<Props> = ({ visible, onClose, tran
 
   if (!transaction) return null;
 
-  if (!transaction) return null;
-
   const getTypeColor = () => {
     switch (transaction.type) {
       case "income": return colors.primary;

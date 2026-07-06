@@ -11,10 +11,9 @@ import { EVENTS } from "../../lib/events";
 import { Swipeable } from "react-native-gesture-handler";
 import * as Haptics from "expo-haptics";
 import { useFocusEffect } from "expo-router";
+import { formatCurrency } from "../../lib/utils";
 
 const PAGE_SIZE = 20;
-
-import { formatCurrency } from "../../lib/utils";
 
 type DateRangeType = "all" | "today" | "week" | "month";
 

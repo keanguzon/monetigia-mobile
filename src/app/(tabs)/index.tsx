@@ -9,6 +9,7 @@ import { useTheme } from "../../theme/ThemeProvider";
 import { GlassCard } from "../../components/ui/GlassCard";
 import { DashboardSkeleton } from "../../components/ui/Skeletons";
 import { AnimatedListItem } from "../../components/ui/AnimatedListItem";
+import { DeviceEventEmitter } from "react-native";
 import { EVENTS } from "../../lib/events";
 import { formatCurrency } from "../../lib/utils";
 
@@ -20,6 +21,7 @@ export default function DashboardScreen() {
   const [monthlyExpense, setMonthlyExpense] = useState(0);
   const [recentTransactions, setRecentTransactions] = useState<any[]>([]);
   const [chartIncome, setChartIncome] = useState<any[]>([]);
+  const [chartExpense, setChartExpense] = useState<any[]>([]);
   const [chartLabels, setChartLabels] = useState<string[]>([]);
   const [dateRange, setDateRange] = useState<"last7" | "last30" | "thisMonth">("thisMonth");
   const router = useRouter();
@@ -320,7 +322,6 @@ export default function DashboardScreen() {
             recentTransactions.map((t, idx) => (
               <AnimatedListItem key={idx} delay={idx * 80}>
                 <View 
-                key={idx} 
                 style={[{ flexDirection: 'row', alignItems: 'center', padding: 16 }, idx !== recentTransactions.length - 1 ? { borderBottomWidth: 1, borderBottomColor: colors.border } : {}]}
               >
                 <View style={[{ padding: 12, borderRadius: 9999, marginRight: 16 }, 
@@ -355,7 +356,6 @@ export default function DashboardScreen() {
             </View>
           )}
         </GlassCard>
-      </View>
-    </ScrollView>
+      </ScrollView>
   );
 }

@@ -135,7 +135,7 @@ export default function CategoriesScreen() {
         {isLoading ? (
           <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 40 }} />
         ) : (
-          <GlassCard intensity={80} style={{ padding: 4 }}>
+          <GlassCard style={{ padding: 4 }}>
             {categories.length === 0 ? (
               <View style={{ padding: 30, alignItems: 'center' }}>
                 <Tags color={colors.textMuted} size={48} opacity={0.5} />
