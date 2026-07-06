@@ -349,9 +349,9 @@ export default function TransactionsScreen() {
             <View style={styles.cardLeft}>
               <View style={[
                 styles.iconCircle, 
-                { backgroundColor: isIncome ? 'rgba(16, 185, 129, 0.1)' : isExpense ? 'rgba(239, 68, 68, 0.1)' : 'rgba(59, 130, 246, 0.1)' }
+                { backgroundColor: isIncome ? 'rgba(34, 197, 94, 0.1)' : isExpense ? 'rgba(239, 68, 68, 0.1)' : 'rgba(59, 130, 246, 0.1)' }
               ]}>
-                {isIncome ? <ArrowDownLeft color="#10b981" size={20} /> :
+                {isIncome ? <ArrowDownLeft color={colors.primary} size={20} /> :
                  isExpense ? <ArrowUpRight color="#ef4444" size={20} /> :
                  <ArrowLeftRight color="#3b82f6" size={20} />}
               </View>
@@ -381,7 +381,7 @@ export default function TransactionsScreen() {
             <View style={styles.cardRight}>
               <Text style={[
                 styles.amountVal, 
-                { color: isIncome ? '#10b981' : isExpense ? '#ef4444' : '#3b82f6' }
+                { color: isIncome ? colors.primary : isExpense ? '#ef4444' : '#3b82f6' }
               ]}>
                 {isIncome ? '+' : isExpense ? '-' : ''}
                 {formatCurrency(Number(item.amount))}
@@ -432,7 +432,7 @@ export default function TransactionsScreen() {
                 styles.typePill,
                 {
                   borderColor: isSelected ? colors.primary : colors.border,
-                  backgroundColor: isSelected ? 'rgba(16, 185, 129, 0.1)' : 'transparent',
+                  backgroundColor: isSelected ? 'rgba(34, 197, 94, 0.1)' : 'transparent',
                 }
               ]}
             >
@@ -466,7 +466,7 @@ export default function TransactionsScreen() {
                       styles.subPill,
                       {
                         borderColor: isSelected ? colors.primary : colors.border,
-                        backgroundColor: isSelected ? 'rgba(16, 185, 129, 0.1)' : 'transparent',
+                        backgroundColor: isSelected ? 'rgba(34, 197, 94, 0.1)' : 'transparent',
                       }
                     ]}
                   >
@@ -490,7 +490,7 @@ export default function TransactionsScreen() {
                     styles.subPill,
                     {
                       borderColor: !selectedCategoryId ? colors.primary : colors.border,
-                      backgroundColor: !selectedCategoryId ? 'rgba(16, 185, 129, 0.1)' : 'transparent',
+                      backgroundColor: !selectedCategoryId ? 'rgba(34, 197, 94, 0.1)' : 'transparent',
                     }
                   ]}
                 >
@@ -508,7 +508,7 @@ export default function TransactionsScreen() {
                         styles.subPill,
                         {
                           borderColor: isSelected ? colors.primary : colors.border,
-                          backgroundColor: isSelected ? 'rgba(16, 185, 129, 0.1)' : 'transparent',
+                          backgroundColor: isSelected ? 'rgba(34, 197, 94, 0.1)' : 'transparent',
                         }
                       ]}
                     >
@@ -588,10 +588,10 @@ const styles = StyleSheet.create({
   filterRowScroll: { flexDirection: 'row' },
   subPill: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, borderWidth: 1, marginRight: 8 },
   cardItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, marginHorizontal: 20, marginBottom: 8 },
-  cardLeft: { flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 12 },
+  cardLeft: { flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 8 },
   iconCircle: { padding: 10, borderRadius: 999, marginRight: 12 },
-  descText: { fontFamily: 'BricolageGrotesque_700Bold', fontSize: 16, marginBottom: 4 },
-  subtextRow: { flexDirection: 'row', alignItems: 'center' },
+  descText: { fontFamily: 'BricolageGrotesque_700Bold', fontSize: 16, marginBottom: 4, flexShrink: 1 },
+  subtextRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' },
   cardRight: { alignItems: 'flex-end' },
   amountVal: { fontFamily: 'BricolageGrotesque_700Bold', fontSize: 16 },
   deleteAction: { width: 80, height: '90%', justifyContent: 'center', alignItems: 'center', borderRadius: 16, alignSelf: 'center', marginBottom: 8, marginRight: 20 },

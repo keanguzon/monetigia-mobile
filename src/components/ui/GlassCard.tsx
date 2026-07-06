@@ -18,7 +18,7 @@ export const GlassCard: React.FC<GlassCardProps> = ({ children, glassStyle = 're
         overflow: 'hidden', 
         borderColor: colors.border,
         borderWidth: 1,
-        backgroundColor: isDark ? 'rgba(15, 23, 42, 0.6)' : 'rgba(255, 255, 255, 0.6)'
+        backgroundColor: colors.card
       }, style]} 
       {...props}
     >
@@ -26,7 +26,7 @@ export const GlassCard: React.FC<GlassCardProps> = ({ children, glassStyle = 're
         <GlassView 
           glassEffectStyle={glassStyle} 
           colorScheme={isDark ? 'dark' : 'light'} 
-          style={{ padding: 24 }}
+          style={{}}
         >
           {children}
         </GlassView>
@@ -35,7 +35,7 @@ export const GlassCard: React.FC<GlassCardProps> = ({ children, glassStyle = 're
           colors={isDark ? ['rgba(255, 255, 255, 0.05)', 'rgba(255, 255, 255, 0.01)'] : ['rgba(255, 255, 255, 0.6)', 'rgba(255, 255, 255, 0.3)']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          style={{ padding: 24 }}
+          style={{}}
         >
           {children}
         </LinearGradient>

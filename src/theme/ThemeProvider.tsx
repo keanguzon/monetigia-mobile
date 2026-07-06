@@ -12,12 +12,12 @@ type Colors = {
 };
 
 const darkColors: Colors = {
-  background: '#020617', // slate-950
-  card: '#0f172a',       // slate-900
+  background: '#0B0F19',
+  card: '#131929',
   text: '#ffffff',
   textMuted: '#94a3b8',
   border: '#1e293b',
-  primary: '#10b981',    // emerald-500
+  primary: '#22c55e',
 };
 
 const lightColors: Colors = {
@@ -26,7 +26,7 @@ const lightColors: Colors = {
   text: '#0f172a',
   textMuted: '#64748b',
   border: '#e2e8f0',
-  primary: '#10b981',
+  primary: '#16a34a',
 };
 
 type ThemeType = 'light' | 'dark' | 'system';

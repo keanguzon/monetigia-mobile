@@ -197,12 +197,12 @@ export default function DashboardScreen() {
         <View style={{ flexDirection: 'row', gap: 16, marginBottom: 32 }}>
           <GlassCard style={{ flex: 1 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-              <View style={{ backgroundColor: 'rgba(16, 185, 129, 0.1)', padding: 8, borderRadius: 9999, marginRight: 8 }}>
-                <ArrowDownLeft color="#10b981" size={16} />
+              <View style={{ backgroundColor: 'rgba(34, 197, 94, 0.1)', padding: 8, borderRadius: 9999, marginRight: 8 }}>
+                <ArrowDownLeft color={colors.primary} size={16} />
               </View>
               <Text style={{ fontFamily: 'Manrope_500Medium', color: colors.textMuted, fontSize: 14 }}>Income</Text>
             </View>
-            <Text style={{ fontFamily: 'BricolageGrotesque_700Bold', fontSize: 20, color: "#10b981" }}>
+            <Text style={{ fontFamily: 'BricolageGrotesque_700Bold', fontSize: 20, color: colors.primary }}>
               {formatCurrency(monthlyIncome)}
             </Text>
           </GlassCard>
@@ -225,7 +225,7 @@ export default function DashboardScreen() {
           <GlassCard style={{ padding: 16, paddingBottom: 24 }}>
             <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 16, marginBottom: 24 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#10b981' }} />
+                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.primary }} />
                 <Text style={{ fontFamily: 'Manrope_500Medium', color: colors.textMuted, fontSize: 12 }}>Income</Text>
               </View>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
@@ -236,12 +236,12 @@ export default function DashboardScreen() {
             <LineChart
               data={chartIncome}
               data2={chartExpense}
-              color1="#10b981"
+              color1={colors.primary}
               color2="#ef4444"
-              dataPointsColor1="#10b981"
+              dataPointsColor1={colors.primary}
               dataPointsColor2="#ef4444"
               areaChart
-              startFillColor1="#10b981"
+              startFillColor1={colors.primary}
               startFillColor2="#ef4444"
               startOpacity={0.2}
               endOpacity={0.05}
@@ -276,10 +276,10 @@ export default function DashboardScreen() {
                 style={[{ flexDirection: 'row', alignItems: 'center', padding: 16 }, idx !== recentTransactions.length - 1 ? { borderBottomWidth: 1, borderBottomColor: colors.border } : {}]}
               >
                 <View style={[{ padding: 12, borderRadius: 9999, marginRight: 16 }, 
-                  t.type === 'income' ? { backgroundColor: 'rgba(16, 185, 129, 0.1)' } : 
+                  t.type === 'income' ? { backgroundColor: 'rgba(34, 197, 94, 0.1)' } : 
                   t.type === 'expense' ? { backgroundColor: 'rgba(239, 68, 68, 0.1)' } : { backgroundColor: 'rgba(59, 130, 246, 0.1)' }
                 ]}>
-                  {t.type === 'income' ? <ArrowDownLeft color="#10b981" size={20} /> :
+                  {t.type === 'income' ? <ArrowDownLeft color={colors.primary} size={20} /> :
                    t.type === 'expense' ? <ArrowUpRight color="#ef4444" size={20} /> :
                    <ArrowLeftRight color="#3b82f6" size={20} />}
                 </View>
@@ -292,7 +292,7 @@ export default function DashboardScreen() {
                   </Text>
                 </View>
                 <Text style={[{ fontFamily: 'BricolageGrotesque_700Bold', fontSize: 16 }, 
-                  t.type === 'income' ? { color: '#10b981' } : 
+                  t.type === 'income' ? { color: colors.primary } : 
                   t.type === 'expense' ? { color: '#ef4444' } : { color: '#3b82f6' }
                 ]}>
                   {t.type === 'income' ? '+' : t.type === 'expense' ? '-' : ''}

@@ -60,7 +60,6 @@ export default function AccountsScreen() {
         .select("*")
         .eq("user_id", user.id)
         .neq("include_in_networth", false) // Filter out archived accounts
-        .order("display_order", { ascending: true })
         .order("created_at", { ascending: true });
 
       if (data) {
@@ -183,7 +182,7 @@ export default function AccountsScreen() {
                     <GlassCard style={{ padding: 20 }}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                          <View style={{ backgroundColor: 'rgba(16, 185, 129, 0.1)', padding: 12, borderRadius: 999, marginRight: 16 }}>
+                          <View style={{ backgroundColor: 'rgba(34, 197, 94, 0.1)', padding: 12, borderRadius: 999, marginRight: 16 }}>
                             {getAccountIcon(account.type, colors.primary)}
                           </View>
                           <View style={{ flex: 1 }}>

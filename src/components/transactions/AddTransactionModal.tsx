@@ -208,7 +208,7 @@ export const AddTransactionModal: React.FC<Props> = ({ visible, onClose }) => {
 
   const getTypeThemeColor = () => {
     if (type === 'expense') return '#ef4444';
-    if (type === 'income') return '#10b981';
+    if (type === 'income') return colors.primary;
     return '#3b82f6';
   };
 
@@ -242,7 +242,7 @@ export const AddTransactionModal: React.FC<Props> = ({ visible, onClose }) => {
                   <Text style={[styles.typeText, { color: type === 'expense' ? '#fff' : colors.textMuted }]}>Expense</Text>
                 </TouchableOpacity>
                 <TouchableOpacity 
-                  style={[styles.typeBtn, type === 'income' ? { backgroundColor: '#10b981' } : undefined]}
+                  style={[styles.typeBtn, type === 'income' ? { backgroundColor: colors.primary } : undefined]}
                   onPress={() => setType('income')}
                 >
                   <Text style={[styles.typeText, { color: type === 'income' ? '#fff' : colors.textMuted }]}>Income</Text>
@@ -381,7 +381,7 @@ export const AddTransactionModal: React.FC<Props> = ({ visible, onClose }) => {
 
 const styles = StyleSheet.create({
   overlay: { flex: 1, justifyContent: 'flex-end' },
-  backdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)' },
+  backdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)' },
   sheetContainer: { width: '100%', maxHeight: '90%' },
   sheet: { borderBottomLeftRadius: 0, borderBottomRightRadius: 0, padding: 24, paddingBottom: 40 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
