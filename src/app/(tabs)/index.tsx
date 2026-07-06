@@ -6,6 +6,8 @@ import { useRouter, useFocusEffect } from "expo-router";
 import { useSession } from "../_layout";
 import { useTheme } from "../../theme/ThemeProvider";
 import { GlassCard } from "../../components/ui/GlassCard";
+import { DeviceEventEmitter } from "react-native";
+import { EVENTS } from "../../../lib/events";
 
 // Utility formatting
 const formatCurrency = (amount: number) => {
@@ -90,6 +92,13 @@ export default function DashboardScreen() {
       loadData();
     }, [user])
   );
+
+  useEffect(() => {
+    const subscription = DeviceEventEmitter.addListener(EVENTS.TRANSACTION_ADDED, () => {
+      loadData();
+    });
+    return () => subscription.remove();
+  }, []);
 
   const onRefresh = () => {
     setRefreshing(true);
