@@ -332,6 +332,7 @@ export default function TransactionsScreen() {
         renderRightActions={() => renderRightActions(item)}
         overshootRight={false}
         containerStyle={{ width: '100%' }}
+        childrenContainerStyle={{ width: '100%' }}
         onSwipeableWillOpen={() => {
           if (activeSwipeableRef.current && activeSwipeableRef.current !== swipeableRef) {
             activeSwipeableRef.current.close();
@@ -339,7 +340,7 @@ export default function TransactionsScreen() {
           activeSwipeableRef.current = swipeableRef;
         }}
       >
-        <TouchableOpacity activeOpacity={0.8} onPress={() => handleRowPress(item)}>
+        <TouchableOpacity activeOpacity={0.8} onPress={() => handleRowPress(item)} style={{ width: '100%' }}>
           <GlassCard style={styles.cardItem}>
             <View style={styles.cardLeft}>
               <View style={[
