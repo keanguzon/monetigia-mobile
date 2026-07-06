@@ -55,17 +55,25 @@ export default function DashboardScreen() {
       
       setTotalBalance(total - totalDebt);
 
-      // 2. Fetch Current Month Transactions for Income/Expense
+      // 2. Fetch Current Month Transactions (and rolling 7 days for chart)
       const now = new Date();
-      const startOfMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01T00:00:00`;
+      const startOfMonthDate = new Date(now.getFullYear(), now.getMonth(), 1);
+      
+      const sevenDaysAgoDate = new Date();
+      sevenDaysAgoDate.setDate(sevenDaysAgoDate.getDate() - 6);
+      
+      const fetchStartDate = startOfMonthDate < sevenDaysAgoDate ? startOfMonthDate : sevenDaysAgoDate;
+      const pad = (num: number) => String(num).padStart(2, '0');
+      const fetchStartString = `${fetchStartDate.getFullYear()}-${pad(fetchStartDate.getMonth() + 1)}-${pad(fetchStartDate.getDate())}T00:00:00`;
+
       const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-      const endOfMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}T23:59:59`;
+      const endOfMonth = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(lastDay)}T23:59:59`;
 
       const { data: transactions, error: txError } = await getSupabase()
         .from("transactions")
         .select("amount, type, date, description, category:categories(name)")
         .eq("user_id", user.id)
-        .gte("date", startOfMonth)
+        .gte("date", fetchStartString)
         .lte("date", endOfMonth)
         .order("date", { ascending: false })
         .limit(100);
@@ -74,10 +82,18 @@ export default function DashboardScreen() {
 
       let income = 0;
       let expense = 0;
+      const currentMonth = now.getMonth();
+      const currentYear = now.getFullYear();
+
       if (transactions) {
         transactions.forEach((t: any) => {
-          if (t.type === "income") income += Number(t.amount || 0);
-          if (t.type === "expense") expense += Number(t.amount || 0);
+          if (!t.date) return;
+          const localD = new Date(t.date);
+          
+          if (localD.getMonth() === currentMonth && localD.getFullYear() === currentYear) {
+            if (t.type === "income") income += Number(t.amount || 0);
+            if (t.type === "expense") expense += Number(t.amount || 0);
+          }
         });
         setRecentTransactions(transactions.slice(0, 5));
         
@@ -103,9 +119,9 @@ export default function DashboardScreen() {
           
           if (dailyData[dateKey]) {
             if (t.type === 'income') {
-              dailyData[dateKey].income += Number(t.amount);
+              dailyData[dateKey].income = Number((dailyData[dateKey].income + Number(t.amount)).toFixed(2));
             } else if (t.type === 'expense') {
-              dailyData[dateKey].expense += Number(t.amount);
+              dailyData[dateKey].expense = Number((dailyData[dateKey].expense + Number(t.amount)).toFixed(2));
             }
           }
         });
