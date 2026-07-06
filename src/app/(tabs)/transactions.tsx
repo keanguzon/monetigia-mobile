@@ -52,8 +52,9 @@ export default function TransactionsScreen() {
   // Active Swipeable ref to close them on interaction
   const activeSwipeableRef = useRef<any>(null);
 
-  // Concurrency lock to prevent double-fetch race conditions
-  const isFetchingFirstPageRef = useRef(false);
+  // References to handle request concurrency and race conditions
+  const activeFetchIdRef = useRef(0);
+  const debounceTimeoutRef = useRef<any>(null);
 
   const toLocalISOWithOffset = (d: Date) => {
     const offset = -d.getTimezoneOffset();
@@ -157,14 +158,17 @@ export default function TransactionsScreen() {
   }, [user, typeFilter, selectedCategoryId, dateRange, searchQuery]);
 
   const loadFirstPage = async () => {
-    if (!user || isFetchingFirstPageRef.current) return;
-    isFetchingFirstPageRef.current = true;
+    if (!user) return;
+    const fetchId = ++activeFetchIdRef.current;
     try {
       const query = buildQuery(null, null);
       if (!query) return;
 
       const { data, error } = await query;
       if (error) throw error;
+
+      // Discard stale responses to prevent rapid switching race conditions
+      if (fetchId !== activeFetchIdRef.current) return;
 
       setTransactions(data || []);
 
@@ -181,11 +185,21 @@ export default function TransactionsScreen() {
     } catch (err) {
       console.error("Error loading transactions first page", err);
     } finally {
-      setIsLoading(false);
-      setRefreshing(false);
-      isFetchingFirstPageRef.current = false;
+      if (fetchId === activeFetchIdRef.current) {
+        setIsLoading(false);
+        setRefreshing(false);
+      }
     }
   };
+
+  const debouncedLoadFirstPage = useCallback(() => {
+    if (debounceTimeoutRef.current) {
+      clearTimeout(debounceTimeoutRef.current);
+    }
+    debounceTimeoutRef.current = setTimeout(() => {
+      loadFirstPage();
+    }, 50);
+  }, [user, typeFilter, selectedCategoryId, dateRange, searchQuery]);
 
   const loadNextPage = async () => {
     if (isFetchingMore || !hasMore || !user || !lastDateCursor || !lastCreatedAtCursor) return;
@@ -225,20 +239,25 @@ export default function TransactionsScreen() {
   useFocusEffect(
     useCallback(() => {
       setIsLoading(true);
-      loadFirstPage();
+      debouncedLoadFirstPage();
     }, [user, typeFilter, selectedCategoryId, dateRange, searchQuery])
   );
 
   useEffect(() => {
     loadDependencies();
+    return () => {
+      if (debounceTimeoutRef.current) {
+        clearTimeout(debounceTimeoutRef.current);
+      }
+    };
   }, [user]);
 
   useEffect(() => {
     const sub1 = DeviceEventEmitter.addListener(EVENTS.TRANSACTION_ADDED, () => {
-      loadFirstPage();
+      debouncedLoadFirstPage();
     });
     const sub2 = DeviceEventEmitter.addListener(EVENTS.ACCOUNT_UPDATED, () => {
-      loadFirstPage();
+      debouncedLoadFirstPage();
     });
     return () => {
       sub1.remove();
@@ -248,7 +267,7 @@ export default function TransactionsScreen() {
 
   const onRefresh = () => {
     setRefreshing(true);
-    loadFirstPage();
+    debouncedLoadFirstPage();
     loadDependencies();
   };
 
