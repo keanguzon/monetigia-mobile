@@ -96,34 +96,39 @@ export const AddTransactionModal: React.FC<Props> = ({ visible, onClose }) => {
     setIsLoading(true);
     
     try {
-      const localDateString = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}T${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}`;
+      // 1. Construct ISO-8601 string with explicit local timezone offset to preserve time-of-day
+      const offset = -date.getTimezoneOffset();
+      const absOffset = Math.abs(offset);
+      const sign = offset >= 0 ? '+' : '-';
+      const pad = (num: number) => String(Math.floor(num)).padStart(2, '0');
+      
+      const hoursOffset = pad(Math.floor(absOffset / 60));
+      const minsOffset = pad(absOffset % 60);
+      const tzString = `${sign}${hoursOffset}:${minsOffset}`;
+      
+      const year = date.getFullYear();
+      const month = pad(date.getMonth() + 1);
+      const day = pad(date.getDate());
+      const hours = pad(date.getHours());
+      const minutes = pad(date.getMinutes());
+      const seconds = pad(date.getSeconds());
+      
+      const localDateWithOffset = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}${tzString}`;
 
-      const { error } = await getSupabase().from('transactions').insert({
-        user_id: user?.id,
-        amount: numericAmount,
-        type,
-        description: description.trim(),
-        date: localDateString,
-        account_id: selectedAccountId,
-        category_id: selectedCategoryId
+      // 2. Execute Atomic RPC to prevent network drop corruption and floating point drift
+      const { error: rpcError } = await getSupabase().rpc('add_transaction_atomic', {
+        p_user_id: user?.id,
+        p_amount: numericAmount,
+        p_type: type,
+        p_description: description.trim(),
+        p_date: localDateWithOffset,
+        p_account_id: selectedAccountId,
+        p_category_id: selectedCategoryId
       });
 
-      if (error) throw error;
+      if (rpcError) throw rpcError;
 
-      const selectedAccount = accounts.find(a => a.id === selectedAccountId);
-      if (selectedAccount) {
-        const newBalance = type === 'expense' 
-          ? Number(selectedAccount.balance) - numericAmount
-          : Number(selectedAccount.balance) + numericAmount;
-          
-        const { error: accError } = await getSupabase()
-          .from('accounts')
-          .update({ balance: newBalance })
-          .eq('id', selectedAccountId);
-          
-        if (accError) throw accError;
-      }
-
+      // 3. Trigger UI success callbacks
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       DeviceEventEmitter.emit(EVENTS.TRANSACTION_ADDED);
       onClose();
