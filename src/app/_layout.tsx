@@ -10,6 +10,7 @@ import { useFonts } from "expo-font";
 import { BricolageGrotesque_700Bold } from "@expo-google-fonts/bricolage-grotesque";
 import { Manrope_400Regular, Manrope_500Medium } from "@expo-google-fonts/manrope";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 type SessionContextType = {
   session: Session | null;
@@ -90,13 +91,15 @@ export default function RootLayout() {
   }, [session, initialized, segments, initError]);
 
   return (
-    <ThemeProvider>
-      <LayoutContent 
-        initialized={initialized && (fontsLoaded || !!fontError)} 
-        initError={initError || (fontError ? "Failed to load fonts" : null)} 
-        session={session} 
-      />
-    </ThemeProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ThemeProvider>
+        <LayoutContent 
+          initialized={initialized && (fontsLoaded || !!fontError)} 
+          initError={initError || (fontError ? "Failed to load fonts" : null)} 
+          session={session} 
+        />
+      </ThemeProvider>
+    </GestureHandlerRootView>
   );
 }
 
