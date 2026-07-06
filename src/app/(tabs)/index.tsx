@@ -1,23 +1,16 @@
 import { useCallback, useState, useEffect } from "react";
-import { View, Text, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity } from "react-native";
+import { View, Text, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity, ActionSheetIOS, Platform, Alert } from "react-native";
 import { getSupabase } from "../../../lib/supabase";
 import { LineChart } from "react-native-gifted-charts";
-import { Wallet, ArrowDownLeft, ArrowUpRight, ArrowLeftRight } from "lucide-react-native";
+import { Wallet, ArrowDownLeft, ArrowUpRight, ArrowLeftRight, TrendingUp, ChevronDown } from "lucide-react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { useSession } from "../_layout";
 import { useTheme } from "../../theme/ThemeProvider";
 import { GlassCard } from "../../components/ui/GlassCard";
 import { DashboardSkeleton } from "../../components/ui/Skeletons";
-import { DeviceEventEmitter } from "react-native";
+import { AnimatedListItem } from "../../components/ui/AnimatedListItem";
 import { EVENTS } from "../../lib/events";
-
-// Utility formatting
-const formatCurrency = (amount: number) => {
-  return new Intl.NumberFormat("en-PH", {
-    style: "currency",
-    currency: "PHP",
-  }).format(amount);
-};
+import { formatCurrency } from "../../lib/utils";
 
 export default function DashboardScreen() {
   const [isLoading, setIsLoading] = useState(true);
@@ -27,11 +20,41 @@ export default function DashboardScreen() {
   const [monthlyExpense, setMonthlyExpense] = useState(0);
   const [recentTransactions, setRecentTransactions] = useState<any[]>([]);
   const [chartIncome, setChartIncome] = useState<any[]>([]);
-  const [chartExpense, setChartExpense] = useState<any[]>([]);
   const [chartLabels, setChartLabels] = useState<string[]>([]);
+  const [dateRange, setDateRange] = useState<"last7" | "last30" | "thisMonth">("thisMonth");
   const router = useRouter();
   const { user } = useSession();
   const { colors } = useTheme();
+
+  const getDateRange = (range: "last7" | "last30" | "thisMonth") => {
+    const toDateString = (date: Date) => {
+      const pad = (num: number) => String(num).padStart(2, '0');
+      return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+    };
+    const today = new Date();
+    const end = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+
+    if (range === "thisMonth") {
+      const currentStart = new Date(today.getFullYear(), today.getMonth(), 1);
+      return {
+        currentStart: toDateString(currentStart) + "T00:00:00",
+        currentEnd: toDateString(end) + "T23:59:59",
+        days: today.getDate(),
+        startDateObj: currentStart
+      };
+    }
+
+    const days = range === "last7" ? 7 : 30;
+    const currentStart = new Date(end);
+    currentStart.setDate(currentStart.getDate() - (days - 1));
+
+    return {
+      currentStart: toDateString(currentStart) + "T00:00:00",
+      currentEnd: toDateString(end) + "T23:59:59",
+      days: days,
+      startDateObj: currentStart
+    };
+  };
 
   const loadData = async () => {
     try {
@@ -49,33 +72,17 @@ export default function DashboardScreen() {
       
       const total = (accounts || []).reduce((acc: number, curr: any) => acc + Number(curr.balance || 0), 0);
       
-      const { data: debt, error: debtError } = await getSupabase().rpc("get_total_credit_card_debt", { p_user_id: user.id });
-      if (debtError) throw debtError;
-      
-      const totalDebt = Number(debt || 0);
-      
-      setTotalBalance(total - totalDebt);
+      setTotalBalance(total);
 
-      // 2. Fetch Current Month Transactions (and rolling 7 days for chart)
-      const now = new Date();
-      const startOfMonthDate = new Date(now.getFullYear(), now.getMonth(), 1);
-      
-      const sevenDaysAgoDate = new Date();
-      sevenDaysAgoDate.setDate(sevenDaysAgoDate.getDate() - 6);
-      
-      const fetchStartDate = startOfMonthDate < sevenDaysAgoDate ? startOfMonthDate : sevenDaysAgoDate;
-      const pad = (num: number) => String(num).padStart(2, '0');
-      const fetchStartString = `${fetchStartDate.getFullYear()}-${pad(fetchStartDate.getMonth() + 1)}-${pad(fetchStartDate.getDate())}T00:00:00`;
-
-      const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-      const endOfMonth = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(lastDay)}T23:59:59`;
+      // 2. Fetch Transactions based on Date Range
+      const { currentStart, currentEnd, days, startDateObj } = getDateRange(dateRange);
 
       const { data: transactions, error: txError } = await getSupabase()
         .from("transactions")
         .select("amount, type, date, description, category:categories(name)")
         .eq("user_id", user.id)
-        .gte("date", fetchStartString)
-        .lte("date", endOfMonth)
+        .gte("date", currentStart)
+        .lte("date", currentEnd)
         .order("date", { ascending: false })
         .limit(100);
 
@@ -83,38 +90,26 @@ export default function DashboardScreen() {
 
       let income = 0;
       let expense = 0;
-      const currentMonth = now.getMonth();
-      const currentYear = now.getFullYear();
 
       if (transactions) {
         transactions.forEach((t: any) => {
-          if (!t.date) return;
-          const localD = new Date(t.date);
-          
-          if (localD.getMonth() === currentMonth && localD.getFullYear() === currentYear) {
-            if (t.type === "income") income += Number(t.amount || 0);
-            if (t.type === "expense") expense += Number(t.amount || 0);
-          }
+          if (t.type === "income") income += Number(t.amount || 0);
+          if (t.type === "expense") expense += Number(t.amount || 0);
         });
         setRecentTransactions(transactions.slice(0, 5));
         
-        // --- NEW: Process data for Daily Trends Chart ---
         const dailyData: Record<string, { income: number; expense: number }> = {};
         const pad = (num: number) => String(num).padStart(2, '0');
         
-        // Initialize the last 7 days to ensure the chart always has a base X-axis even if empty
-        // Use manual local extraction to prevent `.toISOString()` from shifting the date to UTC yesterday.
-        for (let i = 6; i >= 0; i--) {
-          const d = new Date();
+        for (let i = days - 1; i >= 0; i--) {
+          const d = new Date(currentEnd);
           d.setDate(d.getDate() - i);
           const dateStr = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
           dailyData[dateStr] = { income: 0, expense: 0 };
         }
 
-        // Aggregate actual transactions
         transactions.forEach((t: any) => {
           if (!t.date) return;
-          // Hydrate UTC string from Supabase back to local Date, then extract local YYYY-MM-DD
           const localD = new Date(t.date);
           const dateKey = `${localD.getFullYear()}-${pad(localD.getMonth() + 1)}-${pad(localD.getDate())}`;
           
@@ -128,11 +123,9 @@ export default function DashboardScreen() {
         });
 
         const sortedDates = Object.keys(dailyData).sort();
-        // Parse the YYYY-MM-DD string by manually passing parts to Date constructor 
-        // to avoid the 'UTC midnight shift' for western hemisphere users.
         const formattedLabels = sortedDates.map(d => {
           const [y, m, day] = d.split('-');
-          return new Date(Number(y), Number(m) - 1, Number(day)).toLocaleDateString('en-US', { weekday: 'short' });
+          return new Date(Number(y), Number(m) - 1, Number(day)).toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
         });
         
         const incomeLine = sortedDates.map(d => ({ value: dailyData[d].income }));
@@ -159,11 +152,42 @@ export default function DashboardScreen() {
   );
 
   useEffect(() => {
+    loadData();
+  }, [dateRange]);
+
+  useEffect(() => {
     const subscription = DeviceEventEmitter.addListener(EVENTS.TRANSACTION_ADDED, () => {
       loadData();
     });
     return () => subscription.remove();
-  }, []);
+  }, [dateRange]);
+
+  const handleDateRangeSelect = () => {
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options: ['Cancel', 'This Month', 'Last 7 Days', 'Last 30 Days'],
+          cancelButtonIndex: 0,
+        },
+        (buttonIndex) => {
+          if (buttonIndex === 1) setDateRange('thisMonth');
+          else if (buttonIndex === 2) setDateRange('last7');
+          else if (buttonIndex === 3) setDateRange('last30');
+        }
+      );
+    } else {
+      Alert.alert(
+        'Select Date Range',
+        '',
+        [
+          { text: 'This Month', onPress: () => setDateRange('thisMonth') },
+          { text: 'Last 7 Days', onPress: () => setDateRange('last7') },
+          { text: 'Last 30 Days', onPress: () => setDateRange('last30') },
+          { text: 'Cancel', style: 'cancel' },
+        ]
+      );
+    }
+  };
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -179,8 +203,18 @@ export default function DashboardScreen() {
       style={{ flex: 1, backgroundColor: colors.background }}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
     >
-      <View style={{ padding: 24, paddingTop: 64 }}>
-        <Text style={{ fontFamily: 'BricolageGrotesque_700Bold', fontSize: 30, color: colors.text, marginBottom: 24 }}>Dashboard</Text>
+      <View style={{ padding: 24, paddingTop: 64, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Text style={{ fontFamily: 'BricolageGrotesque_700Bold', fontSize: 30, color: colors.text }}>Dashboard</Text>
+        <TouchableOpacity 
+          onPress={handleDateRangeSelect}
+          style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.border, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16 }}
+        >
+          <Text style={{ color: colors.text, fontSize: 14, fontFamily: 'Manrope_500Medium', marginRight: 4 }}>
+            {dateRange === 'thisMonth' ? 'This Month' : dateRange === 'last7' ? 'Last 7 Days' : 'Last 30 Days'}
+          </Text>
+          <ChevronDown color={colors.text} size={16} />
+        </TouchableOpacity>
+      </View>
 
         {/* Total Balance Card */}
         <GlassCard style={{ marginBottom: 16, padding: 24 }}>
@@ -218,6 +252,19 @@ export default function DashboardScreen() {
             </Text>
           </GlassCard>
         </View>
+
+        {/* Net Savings */}
+        <GlassCard style={{ marginBottom: 32, padding: 24 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+            <View style={{ backgroundColor: monthlyIncome - monthlyExpense >= 0 ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)', padding: 8, borderRadius: 9999, marginRight: 8 }}>
+              <TrendingUp color={monthlyIncome - monthlyExpense >= 0 ? colors.primary : '#ef4444'} size={16} />
+            </View>
+            <Text style={{ fontFamily: 'Manrope_500Medium', color: colors.textMuted, fontSize: 14 }}>Net Savings</Text>
+          </View>
+          <Text style={{ fontFamily: 'BricolageGrotesque_700Bold', fontSize: 20, color: monthlyIncome - monthlyExpense >= 0 ? colors.primary : '#ef4444' }}>
+            {formatCurrency(monthlyIncome - monthlyExpense)}
+          </Text>
+        </GlassCard>
 
         {/* Visual Analytics Chart (PC Parity) */}
         <View style={{ marginBottom: 32 }}>
@@ -271,7 +318,8 @@ export default function DashboardScreen() {
         <GlassCard style={{ padding: 0 }}>
           {recentTransactions.length > 0 ? (
             recentTransactions.map((t, idx) => (
-              <View 
+              <AnimatedListItem key={idx} delay={idx * 80}>
+                <View 
                 key={idx} 
                 style={[{ flexDirection: 'row', alignItems: 'center', padding: 16 }, idx !== recentTransactions.length - 1 ? { borderBottomWidth: 1, borderBottomColor: colors.border } : {}]}
               >
@@ -299,6 +347,7 @@ export default function DashboardScreen() {
                   {formatCurrency(Number(t.amount))}
                 </Text>
               </View>
+              </AnimatedListItem>
             ))
           ) : (
             <View style={{ padding: 32, alignItems: 'center' }}>

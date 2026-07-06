@@ -14,12 +14,7 @@ import { useFocusEffect } from "expo-router";
 
 const PAGE_SIZE = 20;
 
-const formatCurrency = (amount: number) => {
-  return new Intl.NumberFormat("en-PH", {
-    style: "currency",
-    currency: "PHP",
-  }).format(amount);
-};
+import { formatCurrency } from "../../lib/utils";
 
 type DateRangeType = "all" | "today" | "week" | "month";
 

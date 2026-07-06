@@ -11,9 +11,11 @@ import * as Haptics from "expo-haptics";
 import { EVENTS } from "../../lib/events";
 import { Image } from "expo-image";
 import * as Updates from "expo-updates";
+import * as ImagePicker from "expo-image-picker";
+import { decode } from "base64-arraybuffer";
 
 export default function SettingsScreen() {
-  const { colors } = useTheme();
+  const { colors, theme, setTheme, isDark } = useTheme();
   const { user } = useSession();
   const router = useRouter();
 
@@ -28,6 +30,7 @@ export default function SettingsScreen() {
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
 
   const loadData = async () => {
     try {
@@ -105,6 +108,78 @@ export default function SettingsScreen() {
     await AsyncStorage.setItem("KEEP_SIGNED_IN", String(value));
   };
 
+  const toggleTheme = (value: boolean) => {
+    setTheme(value ? "dark" : "light");
+    Haptics.selectionAsync();
+  };
+
+  const handlePickImage = async () => {
+    try {
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      
+      if (!permissionResult.granted) {
+        Alert.alert("Permission Required", "You need to allow access to your photos to upload an avatar.");
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.5,
+        base64: true,
+      });
+
+      if (!result.canceled && result.assets && result.assets[0].base64) {
+        await uploadAvatar(result.assets[0]);
+      }
+    } catch (err) {
+      console.error(err);
+      Alert.alert("Error", "Failed to pick an image.");
+    }
+  };
+
+  const uploadAvatar = async (asset: ImagePicker.ImagePickerAsset) => {
+    if (!user || !asset.base64) return;
+    setIsUploading(true);
+
+    try {
+      const fileExt = asset.uri.split('.').pop() || 'jpeg';
+      const fileName = `${user.id}-${Date.now()}.${fileExt}`;
+      const filePath = `avatars/${fileName}`;
+
+      const { error: uploadError } = await getSupabase().storage
+        .from('profiles')
+        .upload(filePath, decode(asset.base64), {
+          contentType: `image/${fileExt === 'jpg' ? 'jpeg' : fileExt}`,
+        });
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = getSupabase().storage
+        .from('profiles')
+        .getPublicUrl(filePath);
+
+      const { error: updateError } = await getSupabase()
+        .from('users')
+        .update({ avatar_url: publicUrl })
+        .eq('id', user.id);
+
+      if (updateError) throw updateError;
+
+      setAvatarUrl(publicUrl);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert("Success", "Avatar updated successfully.");
+      DeviceEventEmitter.emit(EVENTS.USER_UPDATED);
+    } catch (err: any) {
+      console.error(err);
+      Alert.alert("Error", err.message || "Failed to upload avatar.");
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   const handleSignOut = async () => {
     Alert.alert(
       "Sign Out",
@@ -134,16 +209,6 @@ export default function SettingsScreen() {
         }
       ]
     );
-  };
-
-  const getInitials = (fullName: string) => {
-    if (!fullName) return "?";
-    return fullName
-      .split(" ")
-      .map((n) => n[0])
-      .join("")
-      .toUpperCase()
-      .substring(0, 2);
   };
 
   const handleCheckForUpdates = async () => {
@@ -183,32 +248,35 @@ export default function SettingsScreen() {
   return (
     <ScrollView 
       style={{ flex: 1, backgroundColor: colors.background }}
+      contentContainerStyle={{ padding: 20, paddingTop: 64, paddingBottom: 100 }}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
     >
-      <View style={{ padding: 24, paddingTop: 64 }}>
-        <Text style={{ fontFamily: 'BricolageGrotesque_700Bold', fontSize: 30, color: colors.text, marginBottom: 4 }}>Settings</Text>
-        <Text style={{ fontFamily: 'Manrope_400Regular', color: colors.textMuted, marginBottom: 24 }}>Manage your profile and preferences</Text>
+        <View style={{ alignItems: "center", marginBottom: 30 }}>
+          <TouchableOpacity onPress={handlePickImage} disabled={isUploading}>
+            <View style={{ width: 100, height: 100, borderRadius: 50, overflow: "hidden", backgroundColor: colors.border, justifyContent: "center", alignItems: "center" }}>
+              {isUploading ? (
+                <ActivityIndicator size="large" color={colors.primary} />
+              ) : avatarUrl ? (
+                <Image source={{ uri: avatarUrl }} style={{ width: "100%", height: "100%" }} contentFit="cover" />
+              ) : (
+                <User color={colors.textMuted} size={40} />
+              )}
+            </View>
+            <View style={{ position: "absolute", bottom: 0, right: 0, backgroundColor: colors.primary, borderRadius: 12, padding: 6 }}>
+              <User color="#fff" size={14} />
+            </View>
+          </TouchableOpacity>
+          
+          <Text style={{ fontSize: 24, fontWeight: "bold", color: colors.text, marginTop: 16 }}>
+            {name || "User"}
+          </Text>
+        </View>
 
         {/* Profile Card */}
         <GlassCard style={{ marginBottom: 16, padding: 24 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 24 }}>
-            {avatarUrl ? (
-              <Image 
-                source={{ uri: avatarUrl }} 
-                style={{ width: 64, height: 64, borderRadius: 32, marginRight: 16 }} 
-                contentFit="cover"
-              />
-            ) : (
-              <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: 'rgba(34, 197, 94, 0.1)', alignItems: 'center', justifyContent: 'center', marginRight: 16 }}>
-                <Text style={{ fontFamily: 'BricolageGrotesque_700Bold', fontSize: 24, color: colors.primary }}>
-                  {getInitials(name)}
-                </Text>
-              </View>
-            )}
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontFamily: 'BricolageGrotesque_700Bold', fontSize: 20, color: colors.text }}>{name || "User"}</Text>
-              <Text style={{ fontFamily: 'Manrope_400Regular', fontSize: 14, color: colors.textMuted }}>{user?.email}</Text>
-            </View>
+          <View style={{ marginBottom: 16 }}>
+            <Text style={{ fontFamily: 'BricolageGrotesque_700Bold', fontSize: 16, color: colors.text }}>Email</Text>
+            <Text style={{ fontFamily: 'Manrope_400Regular', fontSize: 14, color: colors.textMuted }}>{user?.email}</Text>
           </View>
 
           <View style={{ borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 16, marginBottom: 16 }}>
@@ -264,6 +332,20 @@ export default function SettingsScreen() {
             <Switch 
               value={keepSignedIn} 
               onValueChange={toggleKeepSignedIn} 
+              trackColor={{ false: colors.border, true: colors.primary }}
+              thumbColor="#fff"
+            />
+          </View>
+        </GlassCard>
+
+        {/* Preferences Card */}
+        <GlassCard style={{ marginBottom: 32, padding: 24 }}>
+          <Text style={{ fontFamily: 'BricolageGrotesque_700Bold', fontSize: 18, color: colors.text, marginBottom: 16 }}>Preferences</Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Text style={{ fontFamily: 'Manrope_500Medium', color: colors.text, fontSize: 16 }}>Dark Mode</Text>
+            <Switch 
+              value={isDark} 
+              onValueChange={toggleTheme} 
               trackColor={{ false: colors.border, true: colors.primary }}
               thumbColor="#fff"
             />

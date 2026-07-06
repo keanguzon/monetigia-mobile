@@ -1,5 +1,5 @@
 import React from 'react';
-import { TouchableOpacity, StyleSheet } from 'react-native';
+import { TouchableOpacity, StyleSheet, Animated } from 'react-native';
 import { Plus } from 'lucide-react-native';
 import { useTheme } from '../../theme/ThemeProvider';
 import * as Haptics from 'expo-haptics';
@@ -10,23 +10,35 @@ interface FABProps {
 
 export const FAB: React.FC<FABProps> = ({ onPress }) => {
   const { colors } = useTheme();
+  const scaleAnim = React.useRef(new Animated.Value(1)).current;
+
+  const handlePressIn = () => {
+    Animated.spring(scaleAnim, { toValue: 0.9, useNativeDriver: true }).start();
+  };
+  const handlePressOut = () => {
+    Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true }).start();
+  };
 
   const handlePress = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     onPress();
   };
 
+  const AnimatedTouchableOpacity = Animated.createAnimatedComponent(TouchableOpacity);
+
   return (
-    <TouchableOpacity
+    <AnimatedTouchableOpacity
       activeOpacity={0.8}
       onPress={handlePress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
       style={[
         styles.fab,
-        { backgroundColor: colors.primary, shadowColor: colors.primary }
+        { backgroundColor: colors.primary, shadowColor: colors.primary, transform: [{ scale: scaleAnim }] }
       ]}
     >
       <Plus color="#ffffff" size={28} strokeWidth={2.5} />
-    </TouchableOpacity>
+    </AnimatedTouchableOpacity>
   );
 };
 

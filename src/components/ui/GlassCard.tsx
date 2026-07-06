@@ -18,7 +18,8 @@ export const GlassCard: React.FC<GlassCardProps> = ({ children, glassStyle = 're
         overflow: 'hidden', 
         borderColor: colors.border,
         borderWidth: 1,
-        backgroundColor: colors.card
+        backgroundColor: colors.card,
+        ...(Platform.OS === 'android' ? { elevation: 2 } : {})
       }, style]} 
       {...props}
     >
@@ -31,7 +32,7 @@ export const GlassCard: React.FC<GlassCardProps> = ({ children, glassStyle = 're
         </GlassView>
       ) : (
         <LinearGradient
-          colors={isDark ? ['rgba(255, 255, 255, 0.05)', 'rgba(255, 255, 255, 0.01)'] : ['rgba(255, 255, 255, 0.6)', 'rgba(255, 255, 255, 0.3)']}
+          colors={isDark ? ['rgba(255, 255, 255, 0.08)', 'rgba(255, 255, 255, 0.03)'] : ['rgba(255, 255, 255, 0.7)', 'rgba(255, 255, 255, 0.4)']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
         >

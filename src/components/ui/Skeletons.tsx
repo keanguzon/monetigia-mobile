@@ -16,6 +16,7 @@ export const Skeleton: React.FC<SkeletonProps> = ({
   borderRadius = 8,
   style,
 }) => {
+  const { isDark } = useTheme();
   const opacity = useRef(new Animated.Value(0.3)).current;
 
   useEffect(() => {
@@ -45,6 +46,7 @@ export const Skeleton: React.FC<SkeletonProps> = ({
           width,
           height,
           borderRadius,
+          backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)',
           opacity,
         },
         style,
@@ -199,9 +201,6 @@ export const TransactionRowSkeleton: React.FC = () => {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   content: { padding: 24, paddingTop: 64 },
-  skeleton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-  },
   transactionRow: {
     flexDirection: 'row',
     alignItems: 'center',

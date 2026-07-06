@@ -1,30 +1,26 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { View, Text, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity, Alert, DeviceEventEmitter } from "react-native";
 import { getSupabase } from "../../../lib/supabase";
-import { Wallet, Landmark, CreditCard, Building2, TrendingUp, PiggyBank, Plus, ArchiveX } from "lucide-react-native";
+import { Wallet, Landmark, CreditCard, Smartphone, TrendingUp, PiggyBank, Plus, ArchiveX } from "lucide-react-native";
 import { useSession } from "../_layout";
 import { useTheme } from "../../theme/ThemeProvider";
 import { GlassCard } from "../../components/ui/GlassCard";
 import { AccountsSkeleton } from "../../components/ui/Skeletons";
 import { AddAccountModal, AccountData } from "../../components/accounts/AddAccountModal";
+import { AnimatedListItem } from "../../components/ui/AnimatedListItem";
 import { EVENTS } from "../../lib/events";
 import { Swipeable } from "react-native-gesture-handler";
 import * as Haptics from "expo-haptics";
 import { useFocusEffect } from "expo-router";
 
-const formatCurrency = (amount: number) => {
-  return new Intl.NumberFormat("en-PH", {
-    style: "currency",
-    currency: "PHP",
-  }).format(amount);
-};
+import { formatCurrency } from "../../lib/utils";
 
 const getAccountIcon = (type: string, color: string) => {
   switch (type) {
     case "cash": return <Wallet color={color} size={24} />;
     case "bank": return <Landmark color={color} size={24} />;
     case "credit_card": return <CreditCard color={color} size={24} />;
-    case "e_wallet": return <Building2 color={color} size={24} />;
+    case "e_wallet": return <Smartphone color={color} size={24} />;
     case "investment": return <TrendingUp color={color} size={24} />;
     default: return <PiggyBank color={color} size={24} />;
   }
@@ -172,12 +168,13 @@ export default function AccountsScreen() {
           </View>
 
           <View style={{ gap: 16 }}>
-            {accounts.map((account) => {
+            {accounts.map((account, idx) => {
               const isDebt = account.type === "credit_card";
               const balance = Number(account.balance || 0);
 
               return (
-                <Swipeable key={account.id} renderRightActions={() => renderRightActions(account.id)} overshootRight={false}>
+                <AnimatedListItem key={account.id} delay={idx * 80}>
+                  <Swipeable renderRightActions={() => renderRightActions(account.id)} overshootRight={false}>
                   <TouchableOpacity activeOpacity={0.8} onPress={() => handleEditAccount(account)}>
                     <GlassCard style={{ padding: 20 }}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
@@ -205,6 +202,7 @@ export default function AccountsScreen() {
                     </GlassCard>
                   </TouchableOpacity>
                 </Swipeable>
+              </AnimatedListItem>
               );
             })}
 

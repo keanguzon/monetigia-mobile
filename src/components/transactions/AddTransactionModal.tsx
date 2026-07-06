@@ -8,6 +8,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { X } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { EVENTS } from '../../lib/events';
+import { toLocalISOWithOffset } from '../../lib/utils';
 
 interface Props {
   visible: boolean;
@@ -144,24 +145,7 @@ export const AddTransactionModal: React.FC<Props> = ({ visible, onClose }) => {
     setIsLoading(true);
     
     try {
-      // Timezone-safe local ISO string formatting to prevent date shift boundaries
-      const offset = -date.getTimezoneOffset();
-      const absOffset = Math.abs(offset);
-      const sign = offset >= 0 ? '+' : '-';
-      const pad = (num: number) => String(Math.floor(num)).padStart(2, '0');
-      
-      const hoursOffset = pad(Math.floor(absOffset / 60));
-      const minsOffset = pad(absOffset % 60);
-      const tzString = `${sign}${hoursOffset}:${minsOffset}`;
-      
-      const year = date.getFullYear();
-      const month = pad(date.getMonth() + 1);
-      const day = pad(date.getDate());
-      const hours = pad(date.getHours());
-      const minutes = pad(date.getMinutes());
-      const seconds = pad(date.getSeconds());
-      
-      const localDateWithOffset = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}${tzString}`;
+      const localDateWithOffset = toLocalISOWithOffset(date);
 
       if (type === 'transfer') {
         // Execute Atomic Transfer RPC
