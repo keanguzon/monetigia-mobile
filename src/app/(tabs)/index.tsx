@@ -1,7 +1,6 @@
-import { useCallback, useState, useEffect } from "react";
+import { useCallback, useState, useEffect, useMemo } from "react";
 import { View, Text, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity, ActionSheetIOS, Platform, Alert, useWindowDimensions } from "react-native";
 import { getSupabase } from "../../../lib/supabase";
-import { LineChart } from "react-native-gifted-charts";
 import { Wallet, ArrowDownLeft, ArrowUpRight, ArrowLeftRight, TrendingUp, ChevronDown } from "lucide-react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { useSession } from "../_layout";
@@ -16,19 +15,39 @@ import { formatCurrency } from "../../lib/utils";
 export default function DashboardScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [totalBalance, setTotalBalance] = useState(0);
   const [monthlyIncome, setMonthlyIncome] = useState(0);
   const [monthlyExpense, setMonthlyExpense] = useState(0);
   const [recentTransactions, setRecentTransactions] = useState<any[]>([]);
-  const [chartIncome, setChartIncome] = useState<any[]>([]);
-  const [chartExpense, setChartExpense] = useState<any[]>([]);
-  const [chartLabels, setChartLabels] = useState<string[]>([]);
   const [dateRange, setDateRange] = useState<"last7" | "last30" | "thisMonth">("thisMonth");
+
+  // Debt preview states
+  const [accounts, setAccounts] = useState<any[]>([]);
+  const [previewAfterPay, setPreviewAfterPay] = useState(false);
+  const [debtByMonth, setDebtByMonth] = useState<Record<string, number>>({});
+  const [selectedDebtMonths, setSelectedDebtMonths] = useState<string[]>([]);
+  const [isDebtLoading, setIsDebtLoading] = useState(false);
+
   const router = useRouter();
   const { user } = useSession();
   const { colors } = useTheme();
-  const { width: screenWidth } = useWindowDimensions();
-  const chartWidth = screenWidth - 24 * 2 - 16 * 2 - 20;
+
+  const totalMoneyRaw = accounts
+    .filter(a => a.type !== 'credit_card' && a.include_in_networth !== false)
+    .reduce((sum, a) => sum + Number(a.balance || 0), 0);
+
+  const sortedMonths = Object.keys(debtByMonth)
+    .filter(m => Number((debtByMonth[m] || 0).toFixed(2)) >= 0.01)
+    .sort((a, b) => (a < b ? -1 : 1));
+
+  const isAllMonthsSelected = selectedDebtMonths.length === sortedMonths.length || selectedDebtMonths.length === 0;
+
+  const selectedDebt = useMemo(() => {
+    const months = isAllMonthsSelected ? sortedMonths : selectedDebtMonths;
+    return months.reduce((sum, m) => sum + Math.max(0, Number(debtByMonth[m] || 0)), 0);
+  }, [debtByMonth, isAllMonthsSelected, selectedDebtMonths, sortedMonths]);
+
+  const totalBalance = previewAfterPay ? totalMoneyRaw - selectedDebt : totalMoneyRaw;
+  const totalDebt = selectedDebt;
 
   const getDateRange = (range: "last7" | "last30" | "thisMonth") => {
     const toDateString = (date: Date) => {
@@ -65,21 +84,119 @@ export default function DashboardScreen() {
       if (!user) return;
 
       // 1. Fetch Accounts for Total Balance
-      const { data: accounts, error: accountsError } = await getSupabase()
+      const { data: accountsData, error: accountsError } = await getSupabase()
         .from("accounts")
-        .select("balance, type, include_in_networth")
-        .eq("user_id", user.id)
-        .neq("type", "credit_card")
-        .neq("include_in_networth", false);
+        .select("*")
+        .eq("user_id", user.id);
       
       if (accountsError) throw accountsError;
       
-      const total = (accounts || []).reduce((acc: number, curr: any) => acc + Number(curr.balance || 0), 0);
-      
-      setTotalBalance(total);
+      if (accountsData) {
+        let accountsList = [...accountsData];
+        setAccounts(accountsList);
+        
+        const creditIds = accountsList.filter((a: any) => a.type === "credit_card").map((a: any) => a.id);
+        
+        if (creditIds.length > 0) {
+          setIsDebtLoading(true);
+          const { data: txData, error: txErr } = await getSupabase()
+            .from("transactions")
+            .select("id, account_id, type, amount, date, transfer_to_account_id")
+            .eq("user_id", user.id)
+            .or(`account_id.in.(${creditIds.join(",")}),transfer_to_account_id.in.(${creditIds.join(",")})`)
+            .order("date", { ascending: false })
+            .limit(5000);
+
+          if (!txErr && txData) {
+            const byMonth: Record<string, number> = {};
+            const byCreditAccount: Record<string, number> = {};
+            creditIds.forEach((id: string) => {
+              byCreditAccount[id] = 0;
+            });
+
+            txData.forEach((t: any) => {
+              const monthKey = typeof t?.date === "string" ? t.date.slice(0, 7) : "unknown";
+              if (!byMonth[monthKey]) byMonth[monthKey] = 0;
+
+              const amt = Number(t?.amount || 0);
+              const isCreditSource = creditIds.includes(t?.account_id);
+              const isCreditDestination = creditIds.includes(t?.transfer_to_account_id);
+
+              if (t.type === "expense" && isCreditSource) {
+                byMonth[monthKey] += amt;
+                byCreditAccount[t.account_id] = Number(byCreditAccount[t.account_id] || 0) + amt;
+              } else if (t.type === "income" && isCreditSource) {
+                byMonth[monthKey] -= amt;
+                byCreditAccount[t.account_id] = Number(byCreditAccount[t.account_id] || 0) - amt;
+              } else if (t.type === "transfer") {
+                if (isCreditDestination) byMonth[monthKey] -= amt;
+                if (isCreditSource) byMonth[monthKey] += amt;
+                if (isCreditDestination) {
+                  byCreditAccount[t.transfer_to_account_id] = Number(byCreditAccount[t.transfer_to_account_id] || 0) - amt;
+                }
+                if (isCreditSource) {
+                  byCreditAccount[t.account_id] = Number(byCreditAccount[t.account_id] || 0) + amt;
+                }
+              }
+            });
+
+            const normalizedByMonth: Record<string, number> = {};
+            const ascMonths = Object.keys(byMonth)
+              .filter((k) => k && k !== "unknown")
+              .sort((a, b) => (a < b ? -1 : 1));
+            let carry = 0;
+            for (const m of ascMonths) {
+              const raw = Number(byMonth[m] || 0);
+              const next = Number((raw + carry).toFixed(2));
+              if (next < 0) {
+                normalizedByMonth[m] = 0;
+                carry = next;
+              } else {
+                normalizedByMonth[m] = next;
+                carry = 0;
+              }
+            }
+
+            setDebtByMonth(normalizedByMonth);
+
+            const nextCreditBalanceById: Record<string, number> = {};
+            creditIds.forEach((id: string) => {
+              nextCreditBalanceById[id] = Math.max(0, Number(byCreditAccount[id] || 0));
+            });
+
+            const creditUpdates = accountsList
+              .filter((a: any) => a?.type === "credit_card" && a?.id)
+              .map((a: any) => {
+                const nextBal = Number(nextCreditBalanceById[a.id] || 0);
+                const currentBal = Number(a?.balance || 0);
+                return { id: a.id, currentBal, nextBal };
+              })
+              .filter((u: any) => Math.abs(u.nextBal - u.currentBal) > 0.005);
+
+            if (creditUpdates.length > 0) {
+              await Promise.all(
+                creditUpdates.map((u: any) =>
+                  getSupabase()
+                    .from("accounts")
+                    .update({ balance: u.nextBal })
+                    .eq("id", u.id)
+                    .eq("user_id", user.id)
+                )
+              );
+              
+              setAccounts(prev => prev.map((a: any) =>
+                a?.type === "credit_card" && a?.id
+                  ? { ...a, balance: Number(nextCreditBalanceById[a.id] || 0) }
+                  : a
+              ));
+            }
+          }
+        }
+        setIsDebtLoading(false);
+      }
 
       // 2. Fetch Transactions based on Date Range
-      const { currentStart, currentEnd, days, startDateObj } = getDateRange(dateRange);
+      const { currentStart, currentEnd } = getDateRange(dateRange);
 
       const { data: transactions, error: txError } = await getSupabase()
         .from("transactions")
@@ -101,43 +218,6 @@ export default function DashboardScreen() {
           if (t.type === "expense") expense += Number(t.amount || 0);
         });
         setRecentTransactions(transactions.slice(0, 5));
-        
-        const dailyData: Record<string, { income: number; expense: number }> = {};
-        const pad = (num: number) => String(num).padStart(2, '0');
-        
-        for (let i = days - 1; i >= 0; i--) {
-          const d = new Date(currentEnd);
-          d.setDate(d.getDate() - i);
-          const dateStr = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-          dailyData[dateStr] = { income: 0, expense: 0 };
-        }
-
-        transactions.forEach((t: any) => {
-          if (!t.date) return;
-          const localD = new Date(t.date);
-          const dateKey = `${localD.getFullYear()}-${pad(localD.getMonth() + 1)}-${pad(localD.getDate())}`;
-          
-          if (dailyData[dateKey]) {
-            if (t.type === 'income') {
-              dailyData[dateKey].income = Number((dailyData[dateKey].income + Number(t.amount)).toFixed(2));
-            } else if (t.type === 'expense') {
-              dailyData[dateKey].expense = Number((dailyData[dateKey].expense + Number(t.amount)).toFixed(2));
-            }
-          }
-        });
-
-        const sortedDates = Object.keys(dailyData).sort();
-        const formattedLabels = sortedDates.map(d => {
-          const [y, m, day] = d.split('-');
-          return new Date(Number(y), Number(m) - 1, Number(day)).toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
-        });
-        
-        const incomeLine = sortedDates.map(d => ({ value: dailyData[d].income }));
-        const expenseLine = sortedDates.map(d => ({ value: dailyData[d].expense }));
-
-        setChartLabels(formattedLabels);
-        setChartIncome(incomeLine);
-        setChartExpense(expenseLine);
       }
       setMonthlyIncome(income);
       setMonthlyExpense(expense);
@@ -152,7 +232,7 @@ export default function DashboardScreen() {
   useFocusEffect(
     useCallback(() => {
       loadData();
-    }, [user])
+    }, [user, dateRange])
   );
 
   useEffect(() => {
@@ -160,10 +240,14 @@ export default function DashboardScreen() {
   }, [dateRange]);
 
   useEffect(() => {
-    const subscription = DeviceEventEmitter.addListener(EVENTS.TRANSACTION_ADDED, () => {
-      loadData();
-    });
-    return () => subscription.remove();
+    const sub1 = DeviceEventEmitter.addListener(EVENTS.ACCOUNT_ADDED, loadData);
+    const sub2 = DeviceEventEmitter.addListener(EVENTS.ACCOUNT_UPDATED, loadData);
+    const sub3 = DeviceEventEmitter.addListener(EVENTS.TRANSACTION_ADDED, loadData);
+    return () => {
+      sub1.remove();
+      sub2.remove();
+      sub3.remove();
+    };
   }, [dateRange]);
 
   const handleDateRangeSelect = () => {
@@ -221,20 +305,129 @@ export default function DashboardScreen() {
       </View>
       <View style={{ paddingHorizontal: 24 }}>
 
-        {/* Total Balance Card */}
-        <GlassCard style={{ marginBottom: 16, padding: 24 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-            <Wallet color={colors.textMuted} size={20} />
-            <Text style={{ fontFamily: 'Manrope_500Medium', color: colors.textMuted, marginLeft: 8 }}>Total Balance</Text>
+        {/* Combined Net Worth / Debt Balance Card with Preview */}
+        <GlassCard style={{ padding: 20, marginBottom: 16, gap: 16 }}>
+          <View>
+            <Text style={{ fontFamily: 'Manrope_500Medium', color: colors.textMuted }}>Current Total Balance</Text>
+            <Text style={{ fontFamily: 'BricolageGrotesque_700Bold', fontSize: 32, color: colors.primary }}>
+              {formatCurrency(totalBalance)}
+            </Text>
+            <Text style={{ fontFamily: 'Manrope_400Regular', color: colors.textMuted, fontSize: 13, marginTop: 4 }}>
+              Excluding credit card / debt accounts
+            </Text>
           </View>
-          <Text style={{ fontFamily: 'BricolageGrotesque_700Bold', fontSize: 36, color: colors.text }}>
-            {formatCurrency(totalBalance)}
-          </Text>
+
+          <View style={{ backgroundColor: 'rgba(255, 255, 255, 0.03)', padding: 16, borderRadius: 16, gap: 12 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text style={{ fontFamily: 'Manrope_500Medium', color: colors.textMuted, fontSize: 14 }}>
+                {isAllMonthsSelected ? 'Debt balance (All)' : 'Debt balance (Selected)'}
+              </Text>
+              <Text style={{ fontFamily: 'BricolageGrotesque_700Bold', color: '#ef4444', fontSize: 16 }}>
+                {isDebtLoading ? "Loading..." : `-${formatCurrency(totalDebt)}`}
+              </Text>
+            </View>
+
+            <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center', marginTop: 4 }}>
+              <TouchableOpacity 
+                onPress={() => setPreviewAfterPay(!previewAfterPay)}
+                disabled={isDebtLoading}
+                style={{ 
+                  backgroundColor: previewAfterPay ? colors.primary : 'transparent',
+                  borderWidth: previewAfterPay ? 0 : 1,
+                  borderColor: colors.primary,
+                  paddingVertical: 8,
+                  paddingHorizontal: 16,
+                  borderRadius: 999,
+                  alignSelf: 'flex-start'
+                }}
+              >
+                <Text style={{ 
+                  fontFamily: 'Manrope_500Medium', 
+                  color: previewAfterPay ? '#fff' : colors.primary,
+                  fontSize: 14 
+                }}>
+                  {previewAfterPay ? "Preview: after paying" : "Preview: off"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {sortedMonths.length > 0 && (
+              <View style={{ marginTop: 8 }}>
+                <Text style={{ fontFamily: 'Manrope_500Medium', color: colors.textMuted, fontSize: 12, marginBottom: 8 }}>
+                  Select debt months to preview paying:
+                </Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexDirection: 'row' }}>
+                  <TouchableOpacity 
+                    onPress={() => {
+                      if (isAllMonthsSelected) {
+                        setSelectedDebtMonths(sortedMonths.length > 0 ? [sortedMonths[0]] : []);
+                      } else {
+                        setSelectedDebtMonths(sortedMonths);
+                      }
+                    }}
+                    style={{ 
+                      backgroundColor: isAllMonthsSelected ? colors.primary : 'transparent',
+                      borderColor: colors.border,
+                      borderWidth: isAllMonthsSelected ? 0 : 1,
+                      paddingVertical: 6,
+                      paddingHorizontal: 12,
+                      borderRadius: 999,
+                      marginRight: 8,
+                      justifyContent: 'center'
+                    }}
+                  >
+                    <Text style={{ color: isAllMonthsSelected ? '#fff' : colors.text, fontSize: 12, fontFamily: 'Manrope_500Medium' }}>
+                      All months
+                    </Text>
+                  </TouchableOpacity>
+
+                  {sortedMonths.map((m) => {
+                    const isSelected = selectedDebtMonths.includes(m);
+                    const isHighlighted = isSelected && !isAllMonthsSelected;
+                    const monthVal = Math.max(0, Number(debtByMonth[m] || 0));
+                    return (
+                      <TouchableOpacity 
+                        key={m}
+                        onPress={() => {
+                          setSelectedDebtMonths((prev) => {
+                            const prevSet = new Set(prev.length > 0 ? prev : sortedMonths);
+                            if (isSelected) {
+                              prevSet.delete(m);
+                            } else {
+                              prevSet.add(m);
+                            }
+                            
+                            if (prevSet.size === 0) return sortedMonths;
+                            if (prevSet.size === sortedMonths.length) return sortedMonths;
+                            return sortedMonths.filter(x => prevSet.has(x));
+                          });
+                        }}
+                        style={{ 
+                          backgroundColor: isHighlighted ? colors.primary : 'transparent',
+                          borderColor: colors.border,
+                          borderWidth: isHighlighted ? 0 : 1,
+                          paddingVertical: 6,
+                          paddingHorizontal: 12,
+                          borderRadius: 999,
+                          marginRight: 8,
+                          justifyContent: 'center'
+                        }}
+                      >
+                        <Text style={{ color: isHighlighted ? '#fff' : colors.text, fontSize: 12, fontFamily: 'Manrope_500Medium' }}>
+                          {m} ({formatCurrency(monthVal)})
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            )}
+          </View>
         </GlassCard>
 
         {/* Income / Expense Grid */}
-        <View style={{ flexDirection: 'row', gap: 16, marginBottom: 32 }}>
-          <GlassCard style={{ flex: 1, padding: 24 }}>
+        <View style={{ flexDirection: 'row', gap: 16, marginBottom: 24 }}>
+          <GlassCard style={{ flex: 1, padding: 20 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
               <View style={{ backgroundColor: 'rgba(34, 197, 94, 0.1)', padding: 8, borderRadius: 9999, marginRight: 8 }}>
                 <ArrowDownLeft color={colors.primary} size={16} />
@@ -245,7 +438,7 @@ export default function DashboardScreen() {
               {formatCurrency(monthlyIncome)}
             </Text>
           </GlassCard>
-          <GlassCard style={{ flex: 1, padding: 24 }}>
+          <GlassCard style={{ flex: 1, padding: 20 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
               <View style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', padding: 8, borderRadius: 9999, marginRight: 8 }}>
                 <ArrowUpRight color="#ef4444" size={16} />
@@ -259,7 +452,7 @@ export default function DashboardScreen() {
         </View>
 
         {/* Net Savings */}
-        <GlassCard style={{ marginBottom: 32, padding: 24 }}>
+        <GlassCard style={{ marginBottom: 32, padding: 20 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
             <View style={{ backgroundColor: monthlyIncome - monthlyExpense >= 0 ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)', padding: 8, borderRadius: 9999, marginRight: 8 }}>
               <TrendingUp color={monthlyIncome - monthlyExpense >= 0 ? colors.primary : '#ef4444'} size={16} />
@@ -270,48 +463,6 @@ export default function DashboardScreen() {
             {formatCurrency(monthlyIncome - monthlyExpense)}
           </Text>
         </GlassCard>
-
-        {/* Visual Analytics Chart (PC Parity) */}
-        <View style={{ marginBottom: 32 }}>
-          <Text style={{ fontFamily: 'BricolageGrotesque_700Bold', fontSize: 20, color: colors.text, marginBottom: 16 }}>Daily Trends</Text>
-          <GlassCard style={{ padding: 16, paddingBottom: 24 }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 16, marginBottom: 24 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.primary }} />
-                <Text style={{ fontFamily: 'Manrope_500Medium', color: colors.textMuted, fontSize: 12 }}>Income</Text>
-              </View>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#ef4444' }} />
-                <Text style={{ fontFamily: 'Manrope_500Medium', color: colors.textMuted, fontSize: 12 }}>Expense</Text>
-              </View>
-            </View>
-            <LineChart
-              data={chartIncome}
-              data2={chartExpense}
-              color1={colors.primary}
-              color2="#ef4444"
-              dataPointsColor1={colors.primary}
-              dataPointsColor2="#ef4444"
-              areaChart
-              startFillColor1={colors.primary}
-              startFillColor2="#ef4444"
-              startOpacity={0.2}
-              endOpacity={0.05}
-              curved
-              thickness={2}
-              hideRules
-              hideYAxisText
-              yAxisThickness={0}
-              xAxisThickness={0}
-              initialSpacing={10}
-              spacing={45}
-              dataPointsRadius={3}
-              xAxisLabelTexts={chartLabels}
-              xAxisLabelTextStyle={{ color: colors.textMuted, fontFamily: 'Manrope_500Medium', fontSize: 10, textAlign: 'center' }}
-              width={chartWidth}
-            />
-          </GlassCard>
-        </View>
 
         {/* Recent Transactions */}
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>

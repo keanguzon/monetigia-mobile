@@ -120,10 +120,16 @@ export default function CategoriesScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <View style={{ paddingTop: 60, paddingHorizontal: 20, paddingBottom: 16 }}>
+      <View style={{ paddingTop: 60, paddingHorizontal: 20, paddingBottom: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
         <Text style={{ fontSize: 32, fontWeight: "bold", color: colors.text }}>
           Categories
         </Text>
+        <TouchableOpacity 
+          onPress={handleAdd} 
+          style={{ backgroundColor: colors.primary, padding: 10, borderRadius: 999 }}
+        >
+          <Plus color="white" size={20} />
+        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -178,13 +184,6 @@ export default function CategoriesScreen() {
           </GlassCard>
         )}
       </ScrollView>
-
-      <TouchableOpacity
-        style={[styles.fab, { backgroundColor: colors.primary }]}
-        onPress={handleAdd}
-      >
-        <Plus color="white" size={24} />
-      </TouchableOpacity>
 
       <AddCategoryModal
         visible={modalVisible}

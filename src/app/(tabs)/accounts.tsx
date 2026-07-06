@@ -74,7 +74,7 @@ export default function WalletsScreen() {
     .reduce((sum, a) => sum + Number(a.balance || 0), 0);
 
   const sortedMonths = Object.keys(debtByMonth)
-    .filter(m => Math.max(0, Number(debtByMonth[m] || 0)) > 0)
+    .filter(m => Number((debtByMonth[m] || 0).toFixed(2)) >= 0.01)
     .sort((a, b) => (a < b ? -1 : 1));
 
   const isAllMonthsSelected = selectedDebtMonths.length === sortedMonths.length || selectedDebtMonths.length === 0;
@@ -151,7 +151,7 @@ export default function WalletsScreen() {
             let carry = 0;
             for (const m of ascMonths) {
               const raw = Number(byMonth[m] || 0);
-              const next = raw + carry;
+              const next = Number((raw + carry).toFixed(2));
               if (next < 0) {
                 normalizedByMonth[m] = 0;
                 carry = next;
