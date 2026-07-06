@@ -20,17 +20,27 @@ export default function LoginScreen() {
   const { colors } = useTheme();
 
   useEffect(() => {
-    AsyncStorage.getItem("KEEP_SIGNED_IN").then(val => {
-      if (val !== null) {
-        setKeepSignedIn(val === "true");
-      }
-    });
+    try {
+      AsyncStorage.getItem("KEEP_SIGNED_IN").then(val => {
+        if (val !== null) {
+          setKeepSignedIn(val === "true");
+        }
+      }).catch(() => {
+        setKeepSignedIn(true);
+      });
+    } catch (e) {
+      setKeepSignedIn(true);
+    }
   }, []);
 
   const toggleKeepSignedIn = async () => {
     const newValue = !keepSignedIn;
     setKeepSignedIn(newValue);
-    await AsyncStorage.setItem("KEEP_SIGNED_IN", String(newValue));
+    try {
+      await AsyncStorage.setItem("KEEP_SIGNED_IN", String(newValue));
+    } catch (e) {
+      // Ignore storage errors on low-end devices
+    }
   };
 
   const redirectTo = makeRedirectUri({
@@ -126,7 +136,8 @@ export default function LoginScreen() {
 
           <TouchableOpacity 
             onPress={toggleKeepSignedIn} 
-            style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", marginTop: 24 }}
+            disabled={isLoading}
+            style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", marginTop: 24, opacity: isLoading ? 0.5 : 1 }}
           >
             <View style={{ width: 20, height: 20, borderRadius: 6, borderWidth: 1.5, borderColor: keepSignedIn ? colors.primary : colors.textMuted, backgroundColor: keepSignedIn ? colors.primary : "transparent", marginRight: 10, alignItems: "center", justifyContent: "center" }}>
               {keepSignedIn && <View style={{ width: 10, height: 10, backgroundColor: "#fff", borderRadius: 2 }} />}

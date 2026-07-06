@@ -48,7 +48,11 @@ export default function RootLayout() {
         // Check "Keep me signed in" preference (Option B)
         const keepSignedIn = await AsyncStorage.getItem("KEEP_SIGNED_IN");
         if (keepSignedIn === "false") {
-          await supabase.auth.signOut();
+          try {
+            await supabase.auth.signOut();
+          } catch (e) {
+            // ignore network errors on signout
+          }
         }
 
         const { data: { session } } = await supabase.auth.getSession();
@@ -78,7 +82,7 @@ export default function RootLayout() {
 
     const inAuthGroup = segments[0] === "(tabs)";
 
-    if ((!session || initError) && inAuthGroup) {
+    if ((!session || initError) && segments[0] !== "login") {
       router.replace("/login");
     } else if (session && !initError && !inAuthGroup) {
       router.replace("/(tabs)");

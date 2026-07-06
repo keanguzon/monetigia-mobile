@@ -31,26 +31,31 @@ export default function DashboardScreen() {
       if (!user) return;
 
       // 1. Fetch Accounts for Total Balance
-      const { data: accounts } = await getSupabase()
+      const { data: accounts, error: accountsError } = await getSupabase()
         .from("accounts")
         .select("balance, type, include_in_networth")
         .eq("user_id", user.id)
         .neq("type", "credit_card")
         .neq("include_in_networth", false);
       
+      if (accountsError) throw accountsError;
+      
       const total = (accounts || []).reduce((acc: number, curr: any) => acc + Number(curr.balance || 0), 0);
       
-      const { data: debt } = await getSupabase().rpc("get_total_credit_card_debt", { p_user_id: user.id });
+      const { data: debt, error: debtError } = await getSupabase().rpc("get_total_credit_card_debt", { p_user_id: user.id });
+      if (debtError) throw debtError;
+      
       const totalDebt = Number(debt || 0);
       
       setTotalBalance(total - totalDebt);
 
       // 2. Fetch Current Month Transactions for Income/Expense
       const now = new Date();
-      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-      const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).toISOString();
+      const startOfMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01T00:00:00`;
+      const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+      const endOfMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}T23:59:59`;
 
-      const { data: transactions } = await getSupabase()
+      const { data: transactions, error: txError } = await getSupabase()
         .from("transactions")
         .select("amount, type, date, description, category:categories(name)")
         .eq("user_id", user.id)
@@ -58,6 +63,8 @@ export default function DashboardScreen() {
         .lte("date", endOfMonth)
         .order("date", { ascending: false })
         .limit(100);
+
+      if (txError) throw txError;
 
       let income = 0;
       let expense = 0;
