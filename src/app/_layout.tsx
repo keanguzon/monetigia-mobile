@@ -2,6 +2,7 @@ import "../../global.css";
 import { createContext, useContext, useEffect, useState } from "react";
 import { Stack, useRouter, useSegments } from "expo-router";
 import { getSupabase } from "../../lib/supabase";
+import { ThemeProvider } from "../theme/ThemeProvider";
 import { Session, User } from "@supabase/supabase-js";
 import { View, ActivityIndicator, Text } from "react-native";
 
@@ -87,11 +88,13 @@ export default function RootLayout() {
   }
 
   return (
-    <SessionContext.Provider value={{ session, user: session?.user ?? null }}>
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="login" />
-      </Stack>
-    </SessionContext.Provider>
+    <ThemeProvider>
+      <SessionContext.Provider value={{ session, user: session?.user ?? null }}>
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="login" />
+        </Stack>
+      </SessionContext.Provider>
+    </ThemeProvider>
   );
 }
