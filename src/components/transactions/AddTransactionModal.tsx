@@ -73,10 +73,11 @@ export const AddTransactionModal: React.FC<Props> = ({ visible, onClose }) => {
 
   const handleSubmit = async () => {
     if (isLoading) return; // Mutex
+    if (!user) return; // Strict session guard
     setErrorMsg('');
 
     // Validation
-    const numericAmount = parseFloat(amount);
+    const numericAmount = Number(parseFloat(amount).toFixed(2));
     if (isNaN(numericAmount) || numericAmount <= 0) {
       setErrorMsg("Amount must be greater than zero.");
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -143,16 +144,16 @@ export const AddTransactionModal: React.FC<Props> = ({ visible, onClose }) => {
   const filteredCategories = categories.filter(c => c.type === type || c.type === 'both');
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={isLoading ? () => {} : onClose}>
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.overlay}>
-        <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={onClose} />
+        <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={isLoading ? undefined : onClose} disabled={isLoading} />
         
         <View style={styles.sheetContainer}>
           <GlassCard style={styles.sheet} glassStyle="regular">
             <View style={styles.header}>
               <Text style={[styles.title, { color: colors.text }]}>Add Transaction</Text>
-              <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-                <X color={colors.textMuted} size={24} />
+              <TouchableOpacity onPress={isLoading ? undefined : onClose} style={styles.closeBtn} disabled={isLoading}>
+                <X color={isLoading ? colors.border : colors.textMuted} size={24} />
               </TouchableOpacity>
             </View>
 
