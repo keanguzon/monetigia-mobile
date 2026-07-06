@@ -16,15 +16,15 @@ import { useFocusEffect } from "expo-router";
 import { formatCurrency } from "../../lib/utils";
 
 const WALLET_LOGOS: Record<string, any> = {
-  'GCash': require('../../../../assets/images/logos/gcash.png'),
-  'Maya Savings': require('../../../../assets/images/logos/maya.png'),
-  'Maya': require('../../../../assets/images/logos/maya.png'),
-  'GoTyme Savings': require('../../../../assets/images/logos/gotyme.png'),
-  'GoTyme': require('../../../../assets/images/logos/gotyme.png'),
-  'SeaBank Savings': require('../../../../assets/images/logos/seabank.png'),
-  'SeaBank': require('../../../../assets/images/logos/seabank.png'),
-  'SPayLater': require('../../../../assets/images/logos/Spaylater.png'),
-  'Metrobank': require('../../../../assets/images/logos/Metrobank.webp'),
+  'GCash': require('../../../assets/images/logos/gcash.png'),
+  'Maya Savings': require('../../../assets/images/logos/maya.png'),
+  'Maya': require('../../../assets/images/logos/maya.png'),
+  'GoTyme Savings': require('../../../assets/images/logos/gotyme.png'),
+  'GoTyme': require('../../../assets/images/logos/gotyme.png'),
+  'SeaBank Savings': require('../../../assets/images/logos/seabank.png'),
+  'SeaBank': require('../../../assets/images/logos/seabank.png'),
+  'SPayLater': require('../../../assets/images/logos/Spaylater.png'),
+  'Metrobank': require('../../../assets/images/logos/Metrobank.webp'),
 };
 
 const getAccountIcon = (type: string, color: string, name?: string) => {
