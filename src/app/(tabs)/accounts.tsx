@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { View, Text, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity, Alert, DeviceEventEmitter, Image } from "react-native";
 import { getSupabase } from "../../../lib/supabase";
 import { Wallet, Landmark, CreditCard, Smartphone, TrendingUp, PiggyBank, Plus, ArchiveX, Edit2, Trash2 } from "lucide-react-native";
@@ -65,16 +65,27 @@ export default function WalletsScreen() {
   const [transactionModalVisible, setTransactionModalVisible] = useState(false);
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
   const [previewAfterPay, setPreviewAfterPay] = useState(false);
+  const [debtByMonth, setDebtByMonth] = useState<Record<string, number>>({});
+  const [selectedDebtMonths, setSelectedDebtMonths] = useState<string[]>([]);
+  const [isDebtLoading, setIsDebtLoading] = useState(false);
 
   const totalMoneyRaw = accounts
     .filter(a => a.type !== 'credit_card' && a.include_in_networth !== false)
     .reduce((sum, a) => sum + Number(a.balance || 0), 0);
-  const totalDebtRaw = accounts
-    .filter(a => a.type === 'credit_card' && a.include_in_networth !== false)
-    .reduce((sum, a) => sum + Math.max(0, Number(a.balance || 0)), 0);
 
-  const totalBalance = previewAfterPay ? totalMoneyRaw - totalDebtRaw : totalMoneyRaw;
-  const totalDebt = totalDebtRaw;
+  const sortedMonths = Object.keys(debtByMonth)
+    .filter(m => Math.max(0, Number(debtByMonth[m] || 0)) > 0)
+    .sort((a, b) => (a < b ? -1 : 1));
+
+  const isAllMonthsSelected = selectedDebtMonths.length === sortedMonths.length || selectedDebtMonths.length === 0;
+
+  const selectedDebt = useMemo(() => {
+    const months = isAllMonthsSelected ? sortedMonths : selectedDebtMonths;
+    return months.reduce((sum, m) => sum + Math.max(0, Number(debtByMonth[m] || 0)), 0);
+  }, [debtByMonth, isAllMonthsSelected, selectedDebtMonths, sortedMonths]);
+
+  const totalBalance = previewAfterPay ? totalMoneyRaw - selectedDebt : totalMoneyRaw;
+  const totalDebt = selectedDebt;
 
   const loadAccounts = async () => {
     try {
@@ -87,13 +98,112 @@ export default function WalletsScreen() {
         .order("created_at", { ascending: true });
 
       if (data) {
-        setAccounts(data);
+        let accountsList = [...data];
+        const creditIds = accountsList.filter((a: any) => a.type === "credit_card").map((a: any) => a.id);
+        
+        if (creditIds.length > 0) {
+          setIsDebtLoading(true);
+          const { data: txData, error: txErr } = await getSupabase()
+            .from("transactions")
+            .select("id, account_id, type, amount, date, transfer_to_account_id")
+            .eq("user_id", user.id)
+            .or(`account_id.in.(${creditIds.join(",")}),transfer_to_account_id.in.(${creditIds.join(",")})`)
+            .order("date", { ascending: false })
+            .limit(5000);
+
+          if (!txErr && txData) {
+            const byMonth: Record<string, number> = {};
+            const byCreditAccount: Record<string, number> = {};
+            creditIds.forEach((id: string) => {
+              byCreditAccount[id] = 0;
+            });
+
+            txData.forEach((t: any) => {
+              const monthKey = typeof t?.date === "string" ? t.date.slice(0, 7) : "unknown";
+              if (!byMonth[monthKey]) byMonth[monthKey] = 0;
+
+              const amt = Number(t?.amount || 0);
+              const isCreditSource = creditIds.includes(t?.account_id);
+              const isCreditDestination = creditIds.includes(t?.transfer_to_account_id);
+
+              if (t.type === "expense" && isCreditSource) {
+                byMonth[monthKey] += amt;
+                byCreditAccount[t.account_id] = Number(byCreditAccount[t.account_id] || 0) + amt;
+              } else if (t.type === "income" && isCreditSource) {
+                byMonth[monthKey] -= amt;
+                byCreditAccount[t.account_id] = Number(byCreditAccount[t.account_id] || 0) - amt;
+              } else if (t.type === "transfer") {
+                if (isCreditDestination) byMonth[monthKey] -= amt;
+                if (isCreditSource) byMonth[monthKey] += amt;
+                if (isCreditDestination) {
+                  byCreditAccount[t.transfer_to_account_id] = Number(byCreditAccount[t.transfer_to_account_id] || 0) - amt;
+                }
+                if (isCreditSource) {
+                  byCreditAccount[t.account_id] = Number(byCreditAccount[t.account_id] || 0) + amt;
+                }
+              }
+            });
+
+            const normalizedByMonth: Record<string, number> = {};
+            const ascMonths = Object.keys(byMonth)
+              .filter((k) => k && k !== "unknown")
+              .sort((a, b) => (a < b ? -1 : 1));
+            let carry = 0;
+            for (const m of ascMonths) {
+              const raw = Number(byMonth[m] || 0);
+              const next = raw + carry;
+              if (next < 0) {
+                normalizedByMonth[m] = 0;
+                carry = next;
+              } else {
+                normalizedByMonth[m] = next;
+                carry = 0;
+              }
+            }
+
+            setDebtByMonth(normalizedByMonth);
+
+            const nextCreditBalanceById: Record<string, number> = {};
+            creditIds.forEach((id: string) => {
+              nextCreditBalanceById[id] = Math.max(0, Number(byCreditAccount[id] || 0));
+            });
+
+            const creditUpdates = accountsList
+              .filter((a: any) => a?.type === "credit_card" && a?.id)
+              .map((a: any) => {
+                const nextBal = Number(nextCreditBalanceById[a.id] || 0);
+                const currentBal = Number(a?.balance || 0);
+                return { id: a.id, currentBal, nextBal };
+              })
+              .filter((u: any) => Math.abs(u.nextBal - u.currentBal) > 0.005);
+
+            if (creditUpdates.length > 0) {
+              await Promise.all(
+                creditUpdates.map((u: any) =>
+                  getSupabase()
+                    .from("accounts")
+                    .update({ balance: u.nextBal })
+                    .eq("id", u.id)
+                    .eq("user_id", user.id)
+                )
+              );
+              
+              accountsList = accountsList.map((a: any) =>
+                a?.type === "credit_card" && a?.id
+                  ? { ...a, balance: Number(nextCreditBalanceById[a.id] || 0) }
+                  : a
+              );
+            }
+          }
+        }
+        setAccounts(accountsList);
       }
     } catch (err) {
       console.error(err);
     } finally {
       setIsLoading(false);
       setRefreshing(false);
+      setIsDebtLoading(false);
     }
   };
 
@@ -213,32 +323,109 @@ export default function WalletsScreen() {
 
             <View style={{ backgroundColor: 'rgba(255, 255, 255, 0.03)', padding: 16, borderRadius: 16, gap: 12 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text style={{ fontFamily: 'Manrope_500Medium', color: colors.textMuted, fontSize: 14 }}>Debt balance</Text>
+                <Text style={{ fontFamily: 'Manrope_500Medium', color: colors.textMuted, fontSize: 14 }}>
+                  {isAllMonthsSelected ? 'Debt balance (All)' : 'Debt balance (Selected)'}
+                </Text>
                 <Text style={{ fontFamily: 'BricolageGrotesque_700Bold', color: '#ef4444', fontSize: 16 }}>
-                  -{formatCurrency(totalDebt)}
+                  {isDebtLoading ? "Loading..." : `-${formatCurrency(totalDebt)}`}
                 </Text>
               </View>
 
-              <TouchableOpacity 
-                onPress={() => setPreviewAfterPay(!previewAfterPay)}
-                style={{ 
-                  backgroundColor: previewAfterPay ? colors.primary : 'transparent',
-                  borderWidth: previewAfterPay ? 0 : 1,
-                  borderColor: colors.primary,
-                  paddingVertical: 8,
-                  paddingHorizontal: 16,
-                  borderRadius: 999,
-                  alignSelf: 'flex-start'
-                }}
-              >
-                <Text style={{ 
-                  fontFamily: 'Manrope_500Medium', 
-                  color: previewAfterPay ? '#fff' : colors.primary,
-                  fontSize: 14 
-                }}>
-                  {previewAfterPay ? "Preview: after paying" : "Preview: off"}
-                </Text>
-              </TouchableOpacity>
+              <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center', marginTop: 4 }}>
+                <TouchableOpacity 
+                  onPress={() => setPreviewAfterPay(!previewAfterPay)}
+                  disabled={isDebtLoading}
+                  style={{ 
+                    backgroundColor: previewAfterPay ? colors.primary : 'transparent',
+                    borderWidth: previewAfterPay ? 0 : 1,
+                    borderColor: colors.primary,
+                    paddingVertical: 8,
+                    paddingHorizontal: 16,
+                    borderRadius: 999,
+                    alignSelf: 'flex-start'
+                  }}
+                >
+                  <Text style={{ 
+                    fontFamily: 'Manrope_500Medium', 
+                    color: previewAfterPay ? '#fff' : colors.primary,
+                    fontSize: 14 
+                  }}>
+                    {previewAfterPay ? "Preview: after paying" : "Preview: off"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {sortedMonths.length > 0 && (
+                <View style={{ marginTop: 8 }}>
+                  <Text style={{ fontFamily: 'Manrope_500Medium', color: colors.textMuted, fontSize: 12, marginBottom: 8 }}>
+                    Select debt months to preview paying:
+                  </Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexDirection: 'row' }}>
+                    <TouchableOpacity 
+                      onPress={() => {
+                        if (isAllMonthsSelected) {
+                          setSelectedDebtMonths(sortedMonths.length > 0 ? [sortedMonths[0]] : []);
+                        } else {
+                          setSelectedDebtMonths(sortedMonths);
+                        }
+                      }}
+                      style={{ 
+                        backgroundColor: isAllMonthsSelected ? colors.primary : 'transparent',
+                        borderColor: colors.border,
+                        borderWidth: isAllMonthsSelected ? 0 : 1,
+                        paddingVertical: 6,
+                        paddingHorizontal: 12,
+                        borderRadius: 999,
+                        marginRight: 8,
+                        justifyContent: 'center'
+                      }}
+                    >
+                      <Text style={{ color: isAllMonthsSelected ? '#fff' : colors.text, fontSize: 12, fontFamily: 'Manrope_500Medium' }}>
+                        All months
+                      </Text>
+                    </TouchableOpacity>
+
+                    {sortedMonths.map((m) => {
+                      const isSelected = selectedDebtMonths.includes(m);
+                      const isHighlighted = isSelected && !isAllMonthsSelected;
+                      const monthVal = Math.max(0, Number(debtByMonth[m] || 0));
+                      return (
+                        <TouchableOpacity 
+                          key={m}
+                          onPress={() => {
+                            setSelectedDebtMonths((prev) => {
+                              const prevSet = new Set(prev.length > 0 ? prev : sortedMonths);
+                              if (isSelected) {
+                                prevSet.delete(m);
+                              } else {
+                                prevSet.add(m);
+                              }
+                              
+                              if (prevSet.size === 0) return sortedMonths;
+                              if (prevSet.size === sortedMonths.length) return sortedMonths;
+                              return sortedMonths.filter(x => prevSet.has(x));
+                            });
+                          }}
+                          style={{ 
+                            backgroundColor: isHighlighted ? colors.primary : 'transparent',
+                            borderColor: colors.border,
+                            borderWidth: isHighlighted ? 0 : 1,
+                            paddingVertical: 6,
+                            paddingHorizontal: 12,
+                            borderRadius: 999,
+                            marginRight: 8,
+                            justifyContent: 'center'
+                          }}
+                        >
+                          <Text style={{ color: isHighlighted ? '#fff' : colors.text, fontSize: 12, fontFamily: 'Manrope_500Medium' }}>
+                            {m} ({formatCurrency(monthVal)})
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
+              )}
             </View>
           </GlassCard>
 

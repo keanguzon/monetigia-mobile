@@ -31,6 +31,8 @@ export const AddTransactionModal: React.FC<Props> = ({ visible, onClose, initial
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [transferToAccountId, setTransferToAccountId] = useState<string | null>(null);
+  const [isPayLater, setIsPayLater] = useState(false);
+  const [payLaterAccountId, setPayLaterAccountId] = useState<string | null>(null);
   
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -71,6 +73,7 @@ export const AddTransactionModal: React.FC<Props> = ({ visible, onClose, initial
     setDescription('');
     setDate(new Date());
     setTransferToAccountId(null);
+    setIsPayLater(false);
     setErrorMsg('');
     setIsLoading(false);
   };
@@ -79,7 +82,7 @@ export const AddTransactionModal: React.FC<Props> = ({ visible, onClose, initial
     try {
       if (!user) return;
       const [accRes, catRes] = await Promise.all([
-        getSupabase().from('accounts').select('id, name, balance').eq('user_id', user.id).neq('include_in_networth', false),
+        getSupabase().from('accounts').select('id, name, balance, type').eq('user_id', user.id),
         getSupabase().from('categories').select('id, name, type').eq('user_id', user.id)
       ]);
 
@@ -89,22 +92,41 @@ export const AddTransactionModal: React.FC<Props> = ({ visible, onClose, initial
       const loadedAccounts = accRes.data || [];
       setAccounts(loadedAccounts);
       setCategories(catRes.data || []);
-      
-      if (loadedAccounts.length > 0) {
-        const defaultId = (initialAccountId && loadedAccounts.some(a => a.id === initialAccountId))
-          ? initialAccountId
-          : (selectedAccountId && loadedAccounts.some(a => a.id === selectedAccountId))
-            ? selectedAccountId
-            : loadedAccounts[0].id;
+
+      const creditAccounts = loadedAccounts.filter(a => a.type === 'credit_card');
+      const nonCreditAccounts = loadedAccounts.filter(a => a.type !== 'credit_card');
+
+      const preferredAcc = initialAccountId ? loadedAccounts.find(a => a.id === initialAccountId) : null;
+
+      if (preferredAcc && preferredAcc.type === 'credit_card') {
+        setType('transfer');
+        setTransferToAccountId(preferredAcc.id);
         
-        setSelectedAccountId(defaultId);
-        
-        const otherAccounts = loadedAccounts.filter(a => a.id !== defaultId);
-        if (otherAccounts.length > 0) {
-          setTransferToAccountId(otherAccounts[0].id);
-        } else {
-          setTransferToAccountId(null);
+        const defaultSource = nonCreditAccounts.length > 0 ? nonCreditAccounts[0].id : (loadedAccounts.find(a => a.id !== preferredAcc.id)?.id || null);
+        setSelectedAccountId(defaultSource);
+      } else {
+        if (loadedAccounts.length > 0) {
+          const defaultId = (initialAccountId && loadedAccounts.some(a => a.id === initialAccountId))
+            ? initialAccountId
+            : (selectedAccountId && loadedAccounts.some(a => a.id === selectedAccountId))
+              ? selectedAccountId
+              : nonCreditAccounts.length > 0 ? nonCreditAccounts[0].id : loadedAccounts[0].id;
+          
+          setSelectedAccountId(defaultId);
+          
+          const otherAccounts = loadedAccounts.filter(a => a.id !== defaultId);
+          if (otherAccounts.length > 0) {
+            setTransferToAccountId(otherAccounts[0].id);
+          } else {
+            setTransferToAccountId(null);
+          }
         }
+      }
+
+      if (creditAccounts.length > 0) {
+        setPayLaterAccountId(creditAccounts[0].id);
+      } else {
+        setPayLaterAccountId(null);
       }
     } catch (err: any) {
       setErrorMsg("Failed to load accounts/categories.");
@@ -128,7 +150,9 @@ export const AddTransactionModal: React.FC<Props> = ({ visible, onClose, initial
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       return;
     }
-    if (!selectedAccountId) {
+    const effectiveAccountId = (type === 'expense' && isPayLater) ? payLaterAccountId : selectedAccountId;
+
+    if (!effectiveAccountId) {
       setErrorMsg("Please select a source account.");
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       return;
@@ -144,7 +168,7 @@ export const AddTransactionModal: React.FC<Props> = ({ visible, onClose, initial
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
         return;
       }
-      if (selectedAccountId === transferToAccountId) {
+      if (effectiveAccountId === transferToAccountId) {
         setErrorMsg("Source and destination accounts must be different.");
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
         return;
@@ -163,7 +187,7 @@ export const AddTransactionModal: React.FC<Props> = ({ visible, onClose, initial
           p_amount: numericAmount,
           p_description: description.trim() || 'Transfer',
           p_date: localDateWithOffset,
-          p_account_id: selectedAccountId,
+          p_account_id: effectiveAccountId,
           p_transfer_to_account_id: transferToAccountId
         });
 
@@ -176,7 +200,7 @@ export const AddTransactionModal: React.FC<Props> = ({ visible, onClose, initial
           p_type: type,
           p_description: description.trim(),
           p_date: localDateWithOffset,
-          p_account_id: selectedAccountId,
+          p_account_id: effectiveAccountId,
           p_category_id: selectedCategoryId
         });
 
@@ -275,21 +299,84 @@ export const AddTransactionModal: React.FC<Props> = ({ visible, onClose, initial
                 />
               </View>
 
+              {/* Pay Later Toggle */}
+              {type === 'expense' && accounts.some(a => a.type === 'credit_card') && (
+                <View style={[styles.inputGroup, { borderBottomColor: colors.border, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12 }]}>
+                  <View style={{ flex: 1, paddingRight: 16 }}>
+                     <Text style={{ color: colors.text, fontFamily: 'BricolageGrotesque_700Bold', fontSize: 16 }}>Pay Later (Debt)</Text>
+                     <Text style={{ color: colors.textMuted, fontSize: 12, fontFamily: 'Manrope_400Regular', marginTop: 2 }}>
+                       Charge this expense to a credit card or debt account
+                     </Text>
+                  </View>
+                  <TouchableOpacity 
+                    onPress={() => {
+                      const nextVal = !isPayLater;
+                      setIsPayLater(nextVal);
+                      if (nextVal) {
+                        const firstCredit = accounts.find(a => a.type === 'credit_card');
+                        if (firstCredit) setPayLaterAccountId(firstCredit.id);
+                      } else {
+                        const firstNonCredit = accounts.find(a => a.type !== 'credit_card');
+                        if (firstNonCredit) setSelectedAccountId(firstNonCredit.id);
+                      }
+                    }}
+                    style={{
+                      width: 50,
+                      height: 30,
+                      borderRadius: 15,
+                      backgroundColor: isPayLater ? colors.primary : colors.border,
+                      justifyContent: 'center',
+                      paddingHorizontal: 2
+                    }}
+                  >
+                    <View style={{
+                      width: 26,
+                      height: 26,
+                      borderRadius: 13,
+                      backgroundColor: '#fff',
+                      alignSelf: isPayLater ? 'flex-end' : 'flex-start',
+                      shadowColor: '#000',
+                      shadowOffset: { width: 0, height: 2 },
+                      shadowOpacity: 0.2,
+                      shadowRadius: 2,
+                      elevation: 2
+                    }} />
+                  </TouchableOpacity>
+                </View>
+              )}
+
               {/* Source Account Selection */}
               <View style={[styles.inputGroup, { borderBottomColor: colors.border }]}>
                 <Text style={[styles.label, { color: colors.textMuted }]}>
                   {type === 'transfer' ? 'From Account' : 'Account'}
                 </Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pillScroll}>
-                  {accounts.map(acc => (
-                    <TouchableOpacity 
-                      key={acc.id} 
-                      onPress={() => setSelectedAccountId(acc.id)}
-                      style={[styles.pill, { borderColor: colors.border, backgroundColor: selectedAccountId === acc.id ? colors.primary : 'transparent' }]}
-                    >
-                      <Text style={{ color: selectedAccountId === acc.id ? '#fff' : colors.text, fontFamily: 'Manrope_500Medium' }}>{acc.name}</Text>
-                    </TouchableOpacity>
-                  ))}
+                  {accounts
+                    .filter(acc => {
+                      if (type === 'expense') {
+                        return isPayLater ? acc.type === 'credit_card' : acc.type !== 'credit_card';
+                      }
+                      return true;
+                    })
+                    .map(acc => {
+                      const activeId = (type === 'expense' && isPayLater) ? payLaterAccountId : selectedAccountId;
+                      const isSelected = activeId === acc.id;
+                      return (
+                        <TouchableOpacity 
+                          key={acc.id} 
+                          onPress={() => {
+                            if (type === 'expense' && isPayLater) {
+                              setPayLaterAccountId(acc.id);
+                            } else {
+                              setSelectedAccountId(acc.id);
+                            }
+                          }}
+                          style={[styles.pill, { borderColor: colors.border, backgroundColor: isSelected ? colors.primary : 'transparent' }]}
+                        >
+                          <Text style={{ color: isSelected ? '#fff' : colors.text, fontFamily: 'Manrope_500Medium' }}>{acc.name}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
                 </ScrollView>
               </View>
 
