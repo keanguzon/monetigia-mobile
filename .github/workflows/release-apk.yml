@@ -1,0 +1,61 @@
+name: Build and Release APK
+
+on:
+  workflow_dispatch: # Allows you to manually trigger the build from GitHub UI
+  push:
+    tags:
+      - 'v*' # Automatically triggers when you push a new version tag (e.g., git tag v1.0.0 && git push --tags)
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Required to create GitHub Releases
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Setup Expo and EAS
+        uses: expo/expo-github-action@v8
+        with:
+          expo-version: latest
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Build APK on EAS
+        id: eas-build
+        run: |
+          # Start the build, wait for it, and output the result as JSON
+          BUILD_JSON=$(eas build --platform android --profile preview --non-interactive --wait --json)
+          
+          # Extract the download URL from the JSON
+          APK_URL=$(echo $BUILD_JSON | jq -r '.[0].artifacts.buildUrl')
+          
+          if [ -z "$APK_URL" ] || [ "$APK_URL" == "null" ]; then
+            echo "Failed to extract APK URL from build output."
+            echo "EAS Output: $BUILD_JSON"
+            exit 1
+          fi
+          
+          # Download the APK and rename it to monetigia.apk
+          curl -L -o monetigia.apk "$APK_URL"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: monetigia.apk
+          name: Monetigia Mobile Release (Build ${{ github.run_number }})
+          tag_name: v${{ github.run_number }}
+          body: "Download the latest `monetigia.apk` directly from this release."
+          draft: false
+          prerelease: false
