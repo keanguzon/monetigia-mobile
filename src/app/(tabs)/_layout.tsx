@@ -1,17 +1,20 @@
 import { Tabs } from "expo-router";
 import { Home, Wallet, ArrowLeftRight } from "lucide-react-native";
+import { useTheme } from "../../theme/ThemeProvider";
 
 export default function TabLayout() {
+  const { colors } = useTheme();
+
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
-          backgroundColor: "#020617", // slate-950
-          borderTopColor: "#1e293b", // slate-800
+          backgroundColor: colors.card,
+          borderTopColor: colors.border,
         },
-        tabBarActiveTintColor: "#10b981", // emerald-500
-        tabBarInactiveTintColor: "#64748b", // slate-500
+        tabBarActiveTintColor: colors.primary,
+        tabBarInactiveTintColor: colors.textMuted,
       }}
     >
       <Tabs.Screen

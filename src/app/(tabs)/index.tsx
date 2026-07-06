@@ -4,6 +4,8 @@ import { getSupabase } from "../../../lib/supabase";
 import { Wallet, ArrowDownLeft, ArrowUpRight, ArrowLeftRight } from "lucide-react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { useSession } from "../_layout";
+import { useTheme } from "../../theme/ThemeProvider";
+import { GlassCard } from "../../components/ui/GlassCard";
 
 // Utility formatting
 const formatCurrency = (amount: number) => {
@@ -22,6 +24,7 @@ export default function DashboardScreen() {
   const [recentTransactions, setRecentTransactions] = useState<any[]>([]);
   const router = useRouter();
   const { user } = useSession();
+  const { colors } = useTheme();
 
   const loadData = async () => {
     try {
@@ -88,103 +91,103 @@ export default function DashboardScreen() {
 
   if (isLoading) {
     return (
-      <View className="flex-1 items-center justify-center bg-slate-950">
-        <ActivityIndicator size="large" color="#10b981" />
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background }}>
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
 
   return (
     <ScrollView 
-      className="flex-1 bg-slate-950"
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#10b981" />}
+      style={{ flex: 1, backgroundColor: colors.background }}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
     >
-      <View className="p-6 pt-16">
-        <Text className="text-3xl font-bold text-white mb-6">Dashboard</Text>
+      <View style={{ padding: 24, paddingTop: 64 }}>
+        <Text style={{ fontFamily: 'BricolageGrotesque_700Bold', fontSize: 30, color: colors.text, marginBottom: 24 }}>Dashboard</Text>
 
         {/* Total Balance Card */}
-        <View className="bg-slate-900 border border-slate-800 rounded-2xl p-6 mb-4 shadow-sm">
-          <View className="flex-row items-center mb-2">
-            <Wallet color="#94a3b8" size={20} />
-            <Text className="text-slate-400 font-medium ml-2">Total Balance</Text>
+        <GlassCard style={{ marginBottom: 16 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+            <Wallet color={colors.textMuted} size={20} />
+            <Text style={{ fontFamily: 'Manrope_500Medium', color: colors.textMuted, marginLeft: 8 }}>Total Balance</Text>
           </View>
-          <Text className="text-4xl font-bold text-white">
+          <Text style={{ fontFamily: 'BricolageGrotesque_700Bold', fontSize: 36, color: colors.text }}>
             {formatCurrency(totalBalance)}
           </Text>
-        </View>
+        </GlassCard>
 
         {/* Income / Expense Grid */}
-        <View className="flex-row gap-4 mb-8">
-          <View className="flex-1 bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-sm">
-            <View className="flex-row items-center mb-2">
-              <View className="bg-green-500/10 p-2 rounded-full mr-2">
+        <View style={{ flexDirection: 'row', gap: 16, marginBottom: 32 }}>
+          <GlassCard style={{ flex: 1 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+              <View style={{ backgroundColor: 'rgba(16, 185, 129, 0.1)', padding: 8, borderRadius: 9999, marginRight: 8 }}>
                 <ArrowDownLeft color="#10b981" size={16} />
               </View>
-              <Text className="text-slate-400 font-medium text-sm">Income</Text>
+              <Text style={{ fontFamily: 'Manrope_500Medium', color: colors.textMuted, fontSize: 14 }}>Income</Text>
             </View>
-            <Text className="text-xl font-semibold text-green-400">
+            <Text style={{ fontFamily: 'BricolageGrotesque_700Bold', fontSize: 20, color: "#10b981" }}>
               {formatCurrency(monthlyIncome)}
             </Text>
-          </View>
-          <View className="flex-1 bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-sm">
-            <View className="flex-row items-center mb-2">
-              <View className="bg-red-500/10 p-2 rounded-full mr-2">
+          </GlassCard>
+          <GlassCard style={{ flex: 1 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+              <View style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', padding: 8, borderRadius: 9999, marginRight: 8 }}>
                 <ArrowUpRight color="#ef4444" size={16} />
               </View>
-              <Text className="text-slate-400 font-medium text-sm">Expense</Text>
+              <Text style={{ fontFamily: 'Manrope_500Medium', color: colors.textMuted, fontSize: 14 }}>Expense</Text>
             </View>
-            <Text className="text-xl font-semibold text-red-400">
+            <Text style={{ fontFamily: 'BricolageGrotesque_700Bold', fontSize: 20, color: "#ef4444" }}>
               {formatCurrency(monthlyExpense)}
             </Text>
-          </View>
+          </GlassCard>
         </View>
 
         {/* Recent Transactions */}
-        <View className="flex-row justify-between items-center mb-4">
-          <Text className="text-xl font-semibold text-white">Recent Transactions</Text>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <Text style={{ fontFamily: 'BricolageGrotesque_700Bold', fontSize: 20, color: colors.text }}>Recent Transactions</Text>
           <TouchableOpacity onPress={() => router.push("/transactions")}>
-            <Text className="text-emerald-500 font-medium">View All</Text>
+            <Text style={{ fontFamily: 'Manrope_500Medium', color: colors.primary }}>View All</Text>
           </TouchableOpacity>
         </View>
 
-        <View className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-sm">
+        <GlassCard style={{ padding: 0 }}>
           {recentTransactions.length > 0 ? (
             recentTransactions.map((t, idx) => (
               <View 
                 key={idx} 
-                className={`flex-row items-center p-4 ${idx !== recentTransactions.length - 1 ? 'border-b border-slate-800' : ''}`}
+                style={[{ flexDirection: 'row', alignItems: 'center', padding: 16 }, idx !== recentTransactions.length - 1 ? { borderBottomWidth: 1, borderBottomColor: colors.border } : {}]}
               >
-                <View className={`p-3 rounded-full mr-4 ${
-                  t.type === 'income' ? 'bg-green-500/10' : 
-                  t.type === 'expense' ? 'bg-red-500/10' : 'bg-blue-500/10'
-                }`}>
+                <View style={[{ padding: 12, borderRadius: 9999, marginRight: 16 }, 
+                  t.type === 'income' ? { backgroundColor: 'rgba(16, 185, 129, 0.1)' } : 
+                  t.type === 'expense' ? { backgroundColor: 'rgba(239, 68, 68, 0.1)' } : { backgroundColor: 'rgba(59, 130, 246, 0.1)' }
+                ]}>
                   {t.type === 'income' ? <ArrowDownLeft color="#10b981" size={20} /> :
                    t.type === 'expense' ? <ArrowUpRight color="#ef4444" size={20} /> :
                    <ArrowLeftRight color="#3b82f6" size={20} />}
                 </View>
-                <View className="flex-1">
-                  <Text className="text-white font-medium text-base mb-1">
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontFamily: 'Manrope_500Medium', color: colors.text, fontSize: 16, marginBottom: 4 }}>
                     {t.description || t.category?.name || "Transaction"}
                   </Text>
-                  <Text className="text-slate-500 text-xs">
+                  <Text style={{ fontFamily: 'Manrope_400Regular', color: colors.textMuted, fontSize: 12 }}>
                     {new Date(t.date).toLocaleDateString()}
                   </Text>
                 </View>
-                <Text className={`font-semibold text-base ${
-                  t.type === 'income' ? 'text-green-400' : 
-                  t.type === 'expense' ? 'text-red-400' : 'text-blue-400'
-                }`}>
+                <Text style={[{ fontFamily: 'BricolageGrotesque_700Bold', fontSize: 16 }, 
+                  t.type === 'income' ? { color: '#10b981' } : 
+                  t.type === 'expense' ? { color: '#ef4444' } : { color: '#3b82f6' }
+                ]}>
                   {t.type === 'income' ? '+' : t.type === 'expense' ? '-' : ''}
                   {formatCurrency(Number(t.amount))}
                 </Text>
               </View>
             ))
           ) : (
-            <View className="p-8 items-center">
-              <Text className="text-slate-500">No transactions this month</Text>
+            <View style={{ padding: 32, alignItems: 'center' }}>
+              <Text style={{ fontFamily: 'Manrope_400Regular', color: colors.textMuted }}>No transactions this month</Text>
             </View>
           )}
-        </View>
+        </GlassCard>
       </View>
     </ScrollView>
   );

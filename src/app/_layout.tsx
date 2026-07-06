@@ -1,3 +1,4 @@
+// @ts-ignore
 import "../../global.css";
 import { createContext, useContext, useEffect, useState } from "react";
 import { Stack, useRouter, useSegments } from "expo-router";
@@ -5,6 +6,10 @@ import { getSupabase } from "../../lib/supabase";
 import { ThemeProvider, useTheme } from "../theme/ThemeProvider";
 import { Session, User } from "@supabase/supabase-js";
 import { View, ActivityIndicator, Text } from "react-native";
+import { useFonts } from "expo-font";
+import { BricolageGrotesque_700Bold } from "@expo-google-fonts/bricolage-grotesque";
+import { Manrope_400Regular, Manrope_500Medium } from "@expo-google-fonts/manrope";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 type SessionContextType = {
   session: Session | null;
@@ -27,33 +32,43 @@ export default function RootLayout() {
   const segments = useSegments();
   const router = useRouter();
 
+  const [fontsLoaded, fontError] = useFonts({
+    BricolageGrotesque_700Bold,
+    Manrope_400Regular,
+    Manrope_500Medium,
+  });
+
   useEffect(() => {
     let subscription: { unsubscribe: () => void } | null = null;
 
-    try {
-      const supabase = getSupabase();
-
-      supabase.auth.getSession()
-        .then(({ data: { session } }) => {
-          setSession(session);
-          setInitialized(true);
-        })
-        .catch((err) => {
-          setSession(null);
-          setInitialized(true);
-        });
-
-      const { data: { subscription: sub } } = supabase.auth.onAuthStateChange(
-        (_event, session) => {
-          setSession(session);
+    const initAuth = async () => {
+      try {
+        const supabase = getSupabase();
+        
+        // Check "Keep me signed in" preference (Option B)
+        const keepSignedIn = await AsyncStorage.getItem("KEEP_SIGNED_IN");
+        if (keepSignedIn === "false") {
+          await supabase.auth.signOut();
         }
-      );
-      subscription = sub;
-    } catch (err: any) {
-      console.error("Supabase init failed:", err.message);
-      setInitError(err.message);
-      setInitialized(true);
-    }
+
+        const { data: { session } } = await supabase.auth.getSession();
+        setSession(session);
+        setInitialized(true);
+
+        const { data: { subscription: sub } } = supabase.auth.onAuthStateChange(
+          (_event, session) => {
+            setSession(session);
+          }
+        );
+        subscription = sub;
+      } catch (err: any) {
+        console.error("Supabase init failed:", err.message);
+        setInitError(err.message);
+        setInitialized(true);
+      }
+    };
+    
+    initAuth();
 
     return () => subscription?.unsubscribe();
   }, []);
@@ -73,8 +88,8 @@ export default function RootLayout() {
   return (
     <ThemeProvider>
       <LayoutContent 
-        initialized={initialized} 
-        initError={initError} 
+        initialized={initialized && (fontsLoaded || !!fontError)} 
+        initError={initError || (fontError ? "Failed to load fonts" : null)} 
         session={session} 
       />
     </ThemeProvider>
