@@ -3,7 +3,7 @@ import { View, StyleSheet, ViewProps } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../theme/ThemeProvider';
 
-export const AuroraBackground: React.FC<ViewProps> = ({ style, testID, ...props }) => {
+export const AuroraBackground: React.FC<ViewProps> = ({ style, testID, children, ...props }) => {
   const { isDark, colors } = useTheme();
 
   return (
@@ -20,6 +20,7 @@ export const AuroraBackground: React.FC<ViewProps> = ({ style, testID, ...props 
         end={{ x: 0, y: 1 }}
         style={StyleSheet.absoluteFill}
       />
+      {children}
     </View>
   );
 };

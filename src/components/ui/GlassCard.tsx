@@ -1,13 +1,13 @@
 import React from 'react';
 import { View, ViewProps } from 'react-native';
-import { BlurView } from 'expo-glass-effect';
+import { GlassView, GlassStyle } from 'expo-glass-effect';
 import { useTheme } from '../../theme/ThemeProvider';
 
 interface GlassCardProps extends ViewProps {
-  intensity?: number;
+  glassStyle?: GlassStyle;
 }
 
-export const GlassCard: React.FC<GlassCardProps> = ({ children, intensity = 20, style, ...props }) => {
+export const GlassCard: React.FC<GlassCardProps> = ({ children, glassStyle = 'regular', style, ...props }) => {
   const { isDark, colors } = useTheme();
 
   return (
@@ -21,9 +21,13 @@ export const GlassCard: React.FC<GlassCardProps> = ({ children, intensity = 20, 
       }, style]} 
       {...props}
     >
-      <BlurView intensity={intensity} tint={isDark ? 'dark' : 'light'} style={{ padding: 24 }}>
+      <GlassView 
+        glassEffectStyle={glassStyle} 
+        colorScheme={isDark ? 'dark' : 'light'} 
+        style={{ padding: 24 }}
+      >
         {children}
-      </BlurView>
+      </GlassView>
     </View>
   );
 };

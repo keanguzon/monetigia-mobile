@@ -2,7 +2,7 @@ import "../../global.css";
 import { createContext, useContext, useEffect, useState } from "react";
 import { Stack, useRouter, useSegments } from "expo-router";
 import { getSupabase } from "../../lib/supabase";
-import { ThemeProvider } from "../theme/ThemeProvider";
+import { ThemeProvider, useTheme } from "../theme/ThemeProvider";
 import { Session, User } from "@supabase/supabase-js";
 import { View, ActivityIndicator, Text } from "react-native";
 
@@ -70,31 +70,43 @@ export default function RootLayout() {
     }
   }, [session, initialized, segments, initError]);
 
+  return (
+    <ThemeProvider>
+      <LayoutContent 
+        initialized={initialized} 
+        initError={initError} 
+        session={session} 
+      />
+    </ThemeProvider>
+  );
+}
+
+function LayoutContent({ initialized, initError, session }: { initialized: boolean; initError: string | null; session: Session | null }) {
+  const { colors } = useTheme();
+
   if (!initialized) {
     return (
-      <View className="flex-1 items-center justify-center bg-slate-950">
-        <ActivityIndicator size="large" color="#10b981" />
+      <View className="flex-1 items-center justify-center" style={{ backgroundColor: colors.background }}>
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
 
   if (initError) {
     return (
-      <View className="flex-1 items-center justify-center bg-slate-950 p-6">
+      <View className="flex-1 items-center justify-center p-6" style={{ backgroundColor: colors.background }}>
         <Text className="text-red-400 text-center font-medium text-lg mb-2">Unable to connect</Text>
-        <Text className="text-slate-400 text-center text-sm">Please check your network and update the app.</Text>
+        <Text className="text-center text-sm" style={{ color: colors.textMuted }}>Please check your network and update the app.</Text>
       </View>
     );
   }
 
   return (
-    <ThemeProvider>
-      <SessionContext.Provider value={{ session, user: session?.user ?? null }}>
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="login" />
-        </Stack>
-      </SessionContext.Provider>
-    </ThemeProvider>
+    <SessionContext.Provider value={{ session, user: session?.user ?? null }}>
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="login" />
+      </Stack>
+    </SessionContext.Provider>
   );
 }

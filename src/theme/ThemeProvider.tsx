@@ -49,17 +49,28 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
-    AsyncStorage.getItem(THEME_STORAGE_KEY).then((savedTheme) => {
-      if (savedTheme === 'light' || savedTheme === 'dark' || savedTheme === 'system') {
-        setThemeState(savedTheme);
-      }
-      setIsLoaded(true);
-    });
+    AsyncStorage.getItem(THEME_STORAGE_KEY)
+      .then((savedTheme) => {
+        if (savedTheme === 'light' || savedTheme === 'dark' || savedTheme === 'system') {
+          setThemeState(savedTheme);
+        }
+        setIsLoaded(true);
+      })
+      .catch((err) => {
+        console.error("Failed to load theme preference:", err);
+        setIsLoaded(true); // Default to dark theme on error
+      });
   }, []);
 
   const setTheme = async (newTheme: ThemeType) => {
+    const prevTheme = theme;
     setThemeState(newTheme);
-    await AsyncStorage.setItem(THEME_STORAGE_KEY, newTheme);
+    try {
+      await AsyncStorage.setItem(THEME_STORAGE_KEY, newTheme);
+    } catch (err) {
+      console.error("Failed to save theme preference:", err);
+      setThemeState(prevTheme); // Revert on failure
+    }
   };
   
   const isDark = theme === 'system' ? systemTheme === 'dark' : theme === 'dark';
