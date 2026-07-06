@@ -1,12 +1,18 @@
 import { Tabs } from "expo-router";
 import { Home, Wallet, ArrowLeftRight } from "lucide-react-native";
 import { useTheme } from "../../theme/ThemeProvider";
+import { View } from "react-native";
+import { useState } from "react";
+import { FAB } from "../../components/ui/FAB";
+import { AddTransactionModal } from "../../components/transactions/AddTransactionModal";
 
 export default function TabLayout() {
   const { colors } = useTheme();
+  const [modalVisible, setModalVisible] = useState(false);
 
   return (
-    <Tabs
+    <View style={{ flex: 1 }}>
+      <Tabs
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
@@ -39,5 +45,12 @@ export default function TabLayout() {
         }}
       />
     </Tabs>
+      
+      <FAB onPress={() => setModalVisible(true)} />
+      <AddTransactionModal 
+        visible={modalVisible} 
+        onClose={() => setModalVisible(false)} 
+      />
+    </View>
   );
 }
