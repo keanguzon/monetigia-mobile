@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useState, useEffect } from "react";
 import { View, Text, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity } from "react-native";
 import { getSupabase } from "../../../lib/supabase";
 import { Wallet, ArrowDownLeft, ArrowUpRight, ArrowLeftRight } from "lucide-react-native";
@@ -7,7 +7,7 @@ import { useSession } from "../_layout";
 import { useTheme } from "../../theme/ThemeProvider";
 import { GlassCard } from "../../components/ui/GlassCard";
 import { DeviceEventEmitter } from "react-native";
-import { EVENTS } from "../../../lib/events";
+import { EVENTS } from "../../lib/events";
 
 // Utility formatting
 const formatCurrency = (amount: number) => {

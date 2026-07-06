@@ -7,7 +7,7 @@ import { useSession } from '../../app/_layout';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { X } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
-import { EVENTS } from '../../../lib/events';
+import { EVENTS } from '../../lib/events';
 
 interface Props {
   visible: boolean;
@@ -271,7 +271,7 @@ export const AddTransactionModal: React.FC<Props> = ({ visible, onClose }) => {
 
 const styles = StyleSheet.create({
   overlay: { flex: 1, justifyContent: 'flex-end' },
-  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.5)' },
+  backdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)' },
   sheetContainer: { width: '100%', maxHeight: '90%' },
   sheet: { borderBottomLeftRadius: 0, borderBottomRightRadius: 0, padding: 24, paddingBottom: 40 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
