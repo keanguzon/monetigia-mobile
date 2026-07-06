@@ -183,7 +183,7 @@ export default function DashboardScreen() {
         <Text style={{ fontFamily: 'BricolageGrotesque_700Bold', fontSize: 30, color: colors.text, marginBottom: 24 }}>Dashboard</Text>
 
         {/* Total Balance Card */}
-        <GlassCard style={{ marginBottom: 16 }}>
+        <GlassCard style={{ marginBottom: 16, padding: 24 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
             <Wallet color={colors.textMuted} size={20} />
             <Text style={{ fontFamily: 'Manrope_500Medium', color: colors.textMuted, marginLeft: 8 }}>Total Balance</Text>
@@ -195,7 +195,7 @@ export default function DashboardScreen() {
 
         {/* Income / Expense Grid */}
         <View style={{ flexDirection: 'row', gap: 16, marginBottom: 32 }}>
-          <GlassCard style={{ flex: 1 }}>
+          <GlassCard style={{ flex: 1, padding: 24 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
               <View style={{ backgroundColor: 'rgba(34, 197, 94, 0.1)', padding: 8, borderRadius: 9999, marginRight: 8 }}>
                 <ArrowDownLeft color={colors.primary} size={16} />
@@ -206,7 +206,7 @@ export default function DashboardScreen() {
               {formatCurrency(monthlyIncome)}
             </Text>
           </GlassCard>
-          <GlassCard style={{ flex: 1 }}>
+          <GlassCard style={{ flex: 1, padding: 24 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
               <View style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', padding: 8, borderRadius: 9999, marginRight: 8 }}>
                 <ArrowUpRight color="#ef4444" size={16} />

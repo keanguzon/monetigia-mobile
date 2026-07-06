@@ -161,7 +161,7 @@ export const AddAccountModal: React.FC<Props> = ({ visible, onClose, initialData
                           styles.typePill, 
                           { 
                             borderColor: isSelected ? colors.primary : colors.border,
-                            backgroundColor: isSelected ? 'rgba(16, 185, 129, 0.1)' : 'transparent' 
+                            backgroundColor: isSelected ? 'rgba(34, 197, 94, 0.1)' : 'transparent' 
                           }
                         ]}
                       >
@@ -231,7 +231,7 @@ export const AddAccountModal: React.FC<Props> = ({ visible, onClose, initialData
 
 const styles = StyleSheet.create({
   overlay: { flex: 1, justifyContent: 'flex-end' },
-  backdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)' },
+  backdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)' },
   sheetContainer: { width: '100%', maxHeight: '90%' },
   sheet: { borderBottomLeftRadius: 0, borderBottomRightRadius: 0, padding: 24, paddingBottom: 40 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },

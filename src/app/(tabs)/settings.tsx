@@ -4,12 +4,13 @@ import { getSupabase } from "../../../lib/supabase";
 import { useSession } from "../_layout";
 import { useTheme } from "../../theme/ThemeProvider";
 import { GlassCard } from "../../components/ui/GlassCard";
-import { User, LogOut, Save, ShieldCheck } from "lucide-react-native";
+import { User, LogOut, Save, ShieldCheck, RefreshCw } from "lucide-react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { EVENTS } from "../../lib/events";
 import { Image } from "expo-image";
+import * as Updates from "expo-updates";
 
 export default function SettingsScreen() {
   const { colors } = useTheme();
@@ -26,6 +27,7 @@ export default function SettingsScreen() {
   const [keepSignedIn, setKeepSignedIn] = useState(true);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
 
   const loadData = async () => {
     try {
@@ -144,6 +146,32 @@ export default function SettingsScreen() {
       .substring(0, 2);
   };
 
+  const handleCheckForUpdates = async () => {
+    try {
+      setIsCheckingUpdate(true);
+      const update = await Updates.checkForUpdateAsync();
+      if (update.isAvailable) {
+        Alert.alert(
+          "Update Available",
+          "Downloading the latest version...",
+          [{ text: "OK" }]
+        );
+        await Updates.fetchUpdateAsync();
+        Alert.alert(
+          "Update Ready",
+          "The app will now restart to apply the update.",
+          [{ text: "Restart", onPress: () => Updates.reloadAsync() }]
+        );
+      } else {
+        Alert.alert("Up to date", "You are already on the latest version.");
+      }
+    } catch (error: any) {
+      Alert.alert("Error", "Failed to check for updates: " + error.message);
+    } finally {
+      setIsCheckingUpdate(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background }}>
@@ -162,7 +190,7 @@ export default function SettingsScreen() {
         <Text style={{ fontFamily: 'Manrope_400Regular', color: colors.textMuted, marginBottom: 24 }}>Manage your profile and preferences</Text>
 
         {/* Profile Card */}
-        <GlassCard style={{ marginBottom: 16 }}>
+        <GlassCard style={{ marginBottom: 16, padding: 24 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 24 }}>
             {avatarUrl ? (
               <Image 
@@ -171,7 +199,7 @@ export default function SettingsScreen() {
                 contentFit="cover"
               />
             ) : (
-              <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: 'rgba(16, 185, 129, 0.1)', alignItems: 'center', justifyContent: 'center', marginRight: 16 }}>
+              <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: 'rgba(34, 197, 94, 0.1)', alignItems: 'center', justifyContent: 'center', marginRight: 16 }}>
                 <Text style={{ fontFamily: 'BricolageGrotesque_700Bold', fontSize: 24, color: colors.primary }}>
                   {getInitials(name)}
                 </Text>
@@ -211,7 +239,7 @@ export default function SettingsScreen() {
         </GlassCard>
 
         {/* Authentication Card */}
-        <GlassCard style={{ marginBottom: 16 }}>
+        <GlassCard style={{ marginBottom: 16, padding: 24 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
             <ShieldCheck color={colors.text} size={20} style={{ marginRight: 8 }} />
             <Text style={{ fontFamily: 'BricolageGrotesque_700Bold', fontSize: 18, color: colors.text }}>Authentication</Text>
@@ -240,6 +268,30 @@ export default function SettingsScreen() {
               thumbColor="#fff"
             />
           </View>
+        </GlassCard>
+
+        {/* App Updates Card */}
+        <GlassCard style={{ marginBottom: 16, padding: 24 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
+            <RefreshCw color={colors.text} size={20} style={{ marginRight: 8 }} />
+            <Text style={{ fontFamily: 'BricolageGrotesque_700Bold', fontSize: 18, color: colors.text }}>App Updates</Text>
+          </View>
+          
+          <Text style={{ fontFamily: 'Manrope_400Regular', color: colors.textMuted, fontSize: 14, marginBottom: 16 }}>
+            Check if there's a new Over-The-Air (OTA) update available for download.
+          </Text>
+          
+          <TouchableOpacity 
+            style={{ backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: colors.border, padding: 12, borderRadius: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}
+            onPress={handleCheckForUpdates}
+            disabled={isCheckingUpdate}
+          >
+            {isCheckingUpdate ? (
+              <ActivityIndicator color={colors.text} />
+            ) : (
+              <Text style={{ fontFamily: 'BricolageGrotesque_700Bold', color: colors.text, fontSize: 16 }}>Check for Updates</Text>
+            )}
+          </TouchableOpacity>
         </GlassCard>
 
         {/* Danger Zone */}

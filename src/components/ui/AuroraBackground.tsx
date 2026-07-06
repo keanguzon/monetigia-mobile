@@ -9,13 +9,13 @@ export const AuroraBackground: React.FC<ViewProps> = ({ style, testID, children,
   return (
     <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background }, style]} testID={testID} {...props}>
       <LinearGradient
-        colors={isDark ? ['rgba(16, 185, 129, 0.15)', 'transparent'] : ['rgba(16, 185, 129, 0.1)', 'transparent']}
+        colors={isDark ? ['rgba(34, 197, 94, 0.15)', 'transparent'] : ['rgba(34, 197, 94, 0.1)', 'transparent']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={StyleSheet.absoluteFill}
       />
       <LinearGradient
-        colors={isDark ? ['transparent', 'rgba(16, 185, 129, 0.1)'] : ['transparent', 'rgba(16, 185, 129, 0.05)']}
+        colors={isDark ? ['transparent', 'rgba(34, 197, 94, 0.1)'] : ['transparent', 'rgba(34, 197, 94, 0.05)']}
         start={{ x: 1, y: 0 }}
         end={{ x: 0, y: 1 }}
         style={StyleSheet.absoluteFill}
