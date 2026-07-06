@@ -15,7 +15,7 @@ export default function LoginScreen() {
 
   const redirectTo = makeRedirectUri({
     scheme: "monetigia",
-    path: "auth/callback"
+    path: "login"
   });
 
   const handleTokens = async (url: string) => {
