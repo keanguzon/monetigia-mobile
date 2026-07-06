@@ -6,6 +6,7 @@ import { useSession } from "../_layout";
 import { useTheme } from "../../theme/ThemeProvider";
 import { GlassCard } from "../../components/ui/GlassCard";
 import { TransactionDetailModal } from "../../components/transactions/TransactionDetailModal";
+import { TransactionRowSkeleton } from "../../components/ui/Skeletons";
 import { EVENTS } from "../../lib/events";
 import { Swipeable } from "react-native-gesture-handler";
 import * as Haptics from "expo-haptics";
@@ -305,6 +306,9 @@ export default function TransactionsScreen() {
   };
 
   const renderItem = ({ item }: { item: any }) => {
+    if (isLoading) {
+      return <TransactionRowSkeleton />;
+    }
     const isIncome = item.type === "income";
     const isExpense = item.type === "expense";
     let swipeableRef: any = null;
@@ -527,7 +531,7 @@ export default function TransactionsScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <FlatList
-        data={transactions}
+        data={isLoading ? [{ id: 'skel-1' }, { id: 'skel-2' }, { id: 'skel-3' }, { id: 'skel-4' }, { id: 'skel-5' }] : transactions}
         renderItem={renderItem}
         keyExtractor={(item) => item.id}
         ListHeaderComponent={renderHeader}

@@ -5,6 +5,7 @@ import { Wallet, Landmark, CreditCard, Building2, TrendingUp, PiggyBank, Plus, A
 import { useSession } from "../_layout";
 import { useTheme } from "../../theme/ThemeProvider";
 import { GlassCard } from "../../components/ui/GlassCard";
+import { AccountsSkeleton } from "../../components/ui/Skeletons";
 import { AddAccountModal, AccountData } from "../../components/accounts/AddAccountModal";
 import { EVENTS } from "../../lib/events";
 import { Swipeable } from "react-native-gesture-handler";
@@ -151,11 +152,7 @@ export default function AccountsScreen() {
   };
 
   if (isLoading) {
-    return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background }}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
-    );
+    return <AccountsSkeleton />;
   }
 
   return (

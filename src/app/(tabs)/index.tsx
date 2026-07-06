@@ -7,6 +7,7 @@ import { useRouter, useFocusEffect } from "expo-router";
 import { useSession } from "../_layout";
 import { useTheme } from "../../theme/ThemeProvider";
 import { GlassCard } from "../../components/ui/GlassCard";
+import { DashboardSkeleton } from "../../components/ui/Skeletons";
 import { DeviceEventEmitter } from "react-native";
 import { EVENTS } from "../../lib/events";
 
@@ -170,11 +171,7 @@ export default function DashboardScreen() {
   };
 
   if (isLoading) {
-    return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background }}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
-    );
+    return <DashboardSkeleton />;
   }
 
   return (
