@@ -15,10 +15,10 @@ interface Props {
 }
 
 export const AddTransactionModal: React.FC<Props> = ({ visible, onClose }) => {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const { user } = useSession();
 
-  const [type, setType] = useState<'expense' | 'income'>('expense');
+  const [type, setType] = useState<'expense' | 'income' | 'transfer'>('expense');
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [date, setDate] = useState(new Date());
@@ -28,6 +28,7 @@ export const AddTransactionModal: React.FC<Props> = ({ visible, onClose }) => {
   const [categories, setCategories] = useState<any[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+  const [transferToAccountId, setTransferToAccountId] = useState<string | null>(null);
   
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -40,11 +41,34 @@ export const AddTransactionModal: React.FC<Props> = ({ visible, onClose }) => {
     }
   }, [visible, user]);
 
+  // Handle auto-selection of category when type changes
+  useEffect(() => {
+    if (type !== 'transfer' && categories.length > 0) {
+      const matchingCats = categories.filter(c => c.type === type || c.type === 'both');
+      if (matchingCats.length > 0) {
+        setSelectedCategoryId(matchingCats[0].id);
+      } else {
+        setSelectedCategoryId(null);
+      }
+    } else {
+      setSelectedCategoryId(null);
+    }
+  }, [type, categories]);
+
+  // Exclude source account from destination selection automatically
+  useEffect(() => {
+    if (selectedAccountId && transferToAccountId === selectedAccountId) {
+      const otherAcc = accounts.find(a => a.id !== selectedAccountId);
+      setTransferToAccountId(otherAcc ? otherAcc.id : null);
+    }
+  }, [selectedAccountId, accounts]);
+
   const resetForm = () => {
     setType('expense');
     setAmount('');
     setDescription('');
     setDate(new Date());
+    setTransferToAccountId(null);
     setErrorMsg('');
     setIsLoading(false);
   };
@@ -60,11 +84,17 @@ export const AddTransactionModal: React.FC<Props> = ({ visible, onClose }) => {
       if (accRes.error) throw accRes.error;
       if (catRes.error) throw catRes.error;
 
-      setAccounts(accRes.data || []);
+      const loadedAccounts = accRes.data || [];
+      setAccounts(loadedAccounts);
       setCategories(catRes.data || []);
       
-      if (accRes.data && accRes.data.length > 0 && !selectedAccountId) {
-        setSelectedAccountId(accRes.data[0].id);
+      if (loadedAccounts.length > 0) {
+        if (!selectedAccountId) {
+          setSelectedAccountId(loadedAccounts[0].id);
+        }
+        if (loadedAccounts.length > 1 && !transferToAccountId) {
+          setTransferToAccountId(loadedAccounts[1].id);
+        }
       }
     } catch (err: any) {
       setErrorMsg("Failed to load accounts/categories.");
@@ -72,8 +102,8 @@ export const AddTransactionModal: React.FC<Props> = ({ visible, onClose }) => {
   };
 
   const handleSubmit = async () => {
-    if (isLoading) return; // Mutex
-    if (!user) return; // Strict session guard
+    if (isLoading) return;
+    if (!user) return;
     setErrorMsg('');
 
     // Validation
@@ -88,16 +118,33 @@ export const AddTransactionModal: React.FC<Props> = ({ visible, onClose }) => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       return;
     }
-    if (!selectedAccountId || !selectedCategoryId) {
-      setErrorMsg("Please select an account and category.");
+    if (!selectedAccountId) {
+      setErrorMsg("Please select a source account.");
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       return;
+    }
+    if (type !== 'transfer' && !selectedCategoryId) {
+      setErrorMsg("Please select a category.");
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      return;
+    }
+    if (type === 'transfer') {
+      if (!transferToAccountId) {
+        setErrorMsg("Please select a destination account.");
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        return;
+      }
+      if (selectedAccountId === transferToAccountId) {
+        setErrorMsg("Source and destination accounts must be different.");
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        return;
+      }
     }
 
     setIsLoading(true);
     
     try {
-      // 1. Construct ISO-8601 string with explicit local timezone offset to preserve time-of-day
+      // Timezone-safe local ISO string formatting to prevent date shift boundaries
       const offset = -date.getTimezoneOffset();
       const absOffset = Math.abs(offset);
       const sign = offset >= 0 ? '+' : '-';
@@ -116,25 +163,40 @@ export const AddTransactionModal: React.FC<Props> = ({ visible, onClose }) => {
       
       const localDateWithOffset = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}${tzString}`;
 
-      // 2. Execute Atomic RPC to prevent network drop corruption and floating point drift
-      const { error: rpcError } = await getSupabase().rpc('add_transaction_atomic', {
-        p_user_id: user?.id,
-        p_amount: numericAmount,
-        p_type: type,
-        p_description: description.trim(),
-        p_date: localDateWithOffset,
-        p_account_id: selectedAccountId,
-        p_category_id: selectedCategoryId
-      });
+      if (type === 'transfer') {
+        // Execute Atomic Transfer RPC
+        const { error: rpcError } = await getSupabase().rpc('add_transfer_atomic', {
+          p_user_id: user?.id,
+          p_amount: numericAmount,
+          p_description: description.trim() || 'Transfer',
+          p_date: localDateWithOffset,
+          p_account_id: selectedAccountId,
+          p_transfer_to_account_id: transferToAccountId
+        });
 
-      if (rpcError) throw rpcError;
+        if (rpcError) throw rpcError;
+      } else {
+        // Execute Atomic Transaction RPC (income/expense)
+        const { error: rpcError } = await getSupabase().rpc('add_transaction_atomic', {
+          p_user_id: user?.id,
+          p_amount: numericAmount,
+          p_type: type,
+          p_description: description.trim(),
+          p_date: localDateWithOffset,
+          p_account_id: selectedAccountId,
+          p_category_id: selectedCategoryId
+        });
 
-      // 3. Trigger UI success callbacks
+        if (rpcError) throw rpcError;
+      }
+
+      // Success
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       DeviceEventEmitter.emit(EVENTS.TRANSACTION_ADDED);
+      DeviceEventEmitter.emit(EVENTS.ACCOUNT_UPDATED); // Tell accounts to reload
       onClose();
     } catch (err: any) {
-      setErrorMsg(err.message || "Failed to add transaction. Check your connection.");
+      setErrorMsg(err.message || "Failed to save transaction. Check your connection.");
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
       setIsLoading(false);
@@ -142,6 +204,13 @@ export const AddTransactionModal: React.FC<Props> = ({ visible, onClose }) => {
   };
 
   const filteredCategories = categories.filter(c => c.type === type || c.type === 'both');
+  const destinationAccounts = accounts.filter(a => a.id !== selectedAccountId);
+
+  const getTypeThemeColor = () => {
+    if (type === 'expense') return '#ef4444';
+    if (type === 'income') return '#10b981';
+    return '#3b82f6';
+  };
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={isLoading ? () => {} : onClose}>
@@ -164,7 +233,7 @@ export const AddTransactionModal: React.FC<Props> = ({ visible, onClose }) => {
                 </View>
               ) : null}
 
-              {/* Type Selector */}
+              {/* Type Selector (3 Tabs) */}
               <View style={styles.typeToggle}>
                 <TouchableOpacity 
                   style={[styles.typeBtn, type === 'expense' ? { backgroundColor: '#ef4444' } : undefined]}
@@ -178,13 +247,19 @@ export const AddTransactionModal: React.FC<Props> = ({ visible, onClose }) => {
                 >
                   <Text style={[styles.typeText, { color: type === 'income' ? '#fff' : colors.textMuted }]}>Income</Text>
                 </TouchableOpacity>
+                <TouchableOpacity 
+                  style={[styles.typeBtn, type === 'transfer' ? { backgroundColor: '#3b82f6' } : undefined]}
+                  onPress={() => setType('transfer')}
+                >
+                  <Text style={[styles.typeText, { color: type === 'transfer' ? '#fff' : colors.textMuted }]}>Transfer</Text>
+                </TouchableOpacity>
               </View>
 
               {/* Amount Input */}
               <View style={[styles.inputGroup, { borderBottomColor: colors.border }]}>
                 <Text style={[styles.label, { color: colors.textMuted }]}>Amount (PHP)</Text>
                 <TextInput
-                  style={[styles.input, { color: type === 'income' ? '#10b981' : '#ef4444' }]}
+                  style={[styles.input, { color: getTypeThemeColor() }]}
                   keyboardType="decimal-pad"
                   placeholder="0.00"
                   placeholderTextColor={colors.textMuted}
@@ -198,16 +273,18 @@ export const AddTransactionModal: React.FC<Props> = ({ visible, onClose }) => {
                 <Text style={[styles.label, { color: colors.textMuted }]}>Description</Text>
                 <TextInput
                   style={[styles.input, { color: colors.text, fontSize: 16 }]}
-                  placeholder="What was this for?"
+                  placeholder={type === 'transfer' ? 'Transfer between accounts' : 'What was this for?'}
                   placeholderTextColor={colors.textMuted}
                   value={description}
                   onChangeText={setDescription}
                 />
               </View>
 
-              {/* Account Selection */}
+              {/* Source Account Selection */}
               <View style={[styles.inputGroup, { borderBottomColor: colors.border }]}>
-                <Text style={[styles.label, { color: colors.textMuted }]}>Account</Text>
+                <Text style={[styles.label, { color: colors.textMuted }]}>
+                  {type === 'transfer' ? 'From Account' : 'Account'}
+                </Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pillScroll}>
                   {accounts.map(acc => (
                     <TouchableOpacity 
@@ -221,21 +298,46 @@ export const AddTransactionModal: React.FC<Props> = ({ visible, onClose }) => {
                 </ScrollView>
               </View>
 
-              {/* Category Selection */}
-              <View style={[styles.inputGroup, { borderBottomColor: colors.border }]}>
-                <Text style={[styles.label, { color: colors.textMuted }]}>Category</Text>
-                <View style={styles.pillWrap}>
-                  {filteredCategories.map(cat => (
-                    <TouchableOpacity 
-                      key={cat.id} 
-                      onPress={() => setSelectedCategoryId(cat.id)}
-                      style={[styles.pill, { borderColor: colors.border, backgroundColor: selectedCategoryId === cat.id ? colors.primary : 'transparent' }]}
-                    >
-                      <Text style={{ color: selectedCategoryId === cat.id ? '#fff' : colors.text, fontFamily: 'Manrope_500Medium' }}>{cat.name}</Text>
-                    </TouchableOpacity>
-                  ))}
+              {/* Destination Account Selection (only for transfers) */}
+              {type === 'transfer' && (
+                <View style={[styles.inputGroup, { borderBottomColor: colors.border }]}>
+                  <Text style={[styles.label, { color: colors.textMuted }]}>To Account</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pillScroll}>
+                    {destinationAccounts.map(acc => (
+                      <TouchableOpacity 
+                        key={acc.id} 
+                        onPress={() => setTransferToAccountId(acc.id)}
+                        style={[styles.pill, { borderColor: colors.border, backgroundColor: transferToAccountId === acc.id ? '#3b82f6' : 'transparent' }]}
+                      >
+                        <Text style={{ color: transferToAccountId === acc.id ? '#fff' : colors.text, fontFamily: 'Manrope_500Medium' }}>{acc.name}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                  {destinationAccounts.length === 0 && (
+                    <Text style={{ color: colors.textMuted, fontSize: 12, fontFamily: 'Manrope_400Regular', marginTop: 4 }}>
+                      Create another account to enable transfers.
+                    </Text>
+                  )}
                 </View>
-              </View>
+              )}
+
+              {/* Category Selection (only for income/expense) */}
+              {type !== 'transfer' && (
+                <View style={[styles.inputGroup, { borderBottomColor: colors.border }]}>
+                  <Text style={[styles.label, { color: colors.textMuted }]}>Category</Text>
+                  <View style={styles.pillWrap}>
+                    {filteredCategories.map(cat => (
+                      <TouchableOpacity 
+                        key={cat.id} 
+                        onPress={() => setSelectedCategoryId(cat.id)}
+                        style={[styles.pill, { borderColor: colors.border, backgroundColor: selectedCategoryId === cat.id ? colors.primary : 'transparent' }]}
+                      >
+                        <Text style={{ color: selectedCategoryId === cat.id ? '#fff' : colors.text, fontFamily: 'Manrope_500Medium' }}>{cat.name}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              )}
 
               {/* Date Selection */}
               <View style={[styles.inputGroup, { borderBottomColor: colors.border, borderBottomWidth: 0 }]}>
@@ -260,7 +362,7 @@ export const AddTransactionModal: React.FC<Props> = ({ visible, onClose }) => {
 
               {/* Submit Button */}
               <TouchableOpacity 
-                style={[styles.submitBtn, { backgroundColor: colors.primary, opacity: isLoading ? 0.7 : 1 }]} 
+                style={[styles.submitBtn, { backgroundColor: getTypeThemeColor(), opacity: isLoading ? 0.7 : 1 }]} 
                 onPress={handleSubmit}
                 disabled={isLoading}
               >
@@ -293,7 +395,7 @@ const styles = StyleSheet.create({
   input: { fontFamily: 'BricolageGrotesque_700Bold', fontSize: 32, padding: 0 },
   pillScroll: { flexDirection: 'row' },
   pillWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  pill: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 999, borderWidth: 1, marginRight: 8 },
+  pill: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 999, borderWidth: 1, marginRight: 8, marginVertical: 4 },
   submitBtn: { padding: 16, borderRadius: 12, alignItems: 'center', marginTop: 16 },
   submitText: { fontFamily: 'BricolageGrotesque_700Bold', color: '#fff', fontSize: 18 }
 });
