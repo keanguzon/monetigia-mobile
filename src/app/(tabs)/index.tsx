@@ -1,5 +1,5 @@
 import { useCallback, useState, useEffect } from "react";
-import { View, Text, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity, ActionSheetIOS, Platform, Alert } from "react-native";
+import { View, Text, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity, ActionSheetIOS, Platform, Alert, useWindowDimensions } from "react-native";
 import { getSupabase } from "../../../lib/supabase";
 import { LineChart } from "react-native-gifted-charts";
 import { Wallet, ArrowDownLeft, ArrowUpRight, ArrowLeftRight, TrendingUp, ChevronDown } from "lucide-react-native";
@@ -27,6 +27,8 @@ export default function DashboardScreen() {
   const router = useRouter();
   const { user } = useSession();
   const { colors } = useTheme();
+  const { width: screenWidth } = useWindowDimensions();
+  const chartWidth = screenWidth - 24 * 2 - 16 * 2 - 20;
 
   const getDateRange = (range: "last7" | "last30" | "thisMonth") => {
     const toDateString = (date: Date) => {
@@ -306,6 +308,7 @@ export default function DashboardScreen() {
               dataPointsRadius={3}
               xAxisLabelTexts={chartLabels}
               xAxisLabelTextStyle={{ color: colors.textMuted, fontFamily: 'Manrope_500Medium', fontSize: 10, textAlign: 'center' }}
+              width={chartWidth}
             />
           </GlassCard>
         </View>

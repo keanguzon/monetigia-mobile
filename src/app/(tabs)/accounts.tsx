@@ -1,12 +1,13 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { View, Text, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity, Alert, DeviceEventEmitter, Image } from "react-native";
 import { getSupabase } from "../../../lib/supabase";
-import { Wallet, Landmark, CreditCard, Smartphone, TrendingUp, PiggyBank, Plus, ArchiveX } from "lucide-react-native";
+import { Wallet, Landmark, CreditCard, Smartphone, TrendingUp, PiggyBank, Plus, ArchiveX, Edit2 } from "lucide-react-native";
 import { useSession } from "../_layout";
 import { useTheme } from "../../theme/ThemeProvider";
 import { GlassCard } from "../../components/ui/GlassCard";
 import { AccountsSkeleton } from "../../components/ui/Skeletons";
 import { AddAccountModal, AccountData } from "../../components/accounts/AddAccountModal";
+import { AddTransactionModal } from "../../components/transactions/AddTransactionModal";
 import { AnimatedListItem } from "../../components/ui/AnimatedListItem";
 import { EVENTS } from "../../lib/events";
 import { Swipeable } from "react-native-gesture-handler";
@@ -45,7 +46,7 @@ const getAccountTypeLabel = (type: string) => {
   switch (type) {
     case "cash": return "Cash";
     case "bank": return "Bank Account";
-    case "credit_card": return "Credit Card";
+    case "credit_card": return "PayLater / Debt";
     case "e_wallet": return "E-Wallet";
     case "investment": return "Investment";
     default: return "Other";
@@ -61,6 +62,8 @@ export default function WalletsScreen() {
 
   const [modalVisible, setModalVisible] = useState(false);
   const [editingAccount, setEditingAccount] = useState<AccountData | null>(null);
+  const [transactionModalVisible, setTransactionModalVisible] = useState(false);
+  const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
 
   const loadAccounts = async () => {
     try {
@@ -119,6 +122,11 @@ export default function WalletsScreen() {
       balance: account.balance
     });
     setModalVisible(true);
+  };
+
+  const handleTransact = (accountId: string) => {
+    setSelectedAccountId(accountId);
+    setTransactionModalVisible(true);
   };
 
   const handleArchive = (accountId: string) => {
@@ -190,7 +198,7 @@ export default function WalletsScreen() {
               return (
                 <AnimatedListItem key={account.id} delay={idx * 80}>
                   <Swipeable renderRightActions={() => renderRightActions(account.id)} overshootRight={false}>
-                  <TouchableOpacity activeOpacity={0.8} onPress={() => handleEditAccount(account)}>
+                  <TouchableOpacity activeOpacity={0.8} onPress={() => handleTransact(account.id)}>
                     <GlassCard style={{ padding: 20 }}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
@@ -202,6 +210,13 @@ export default function WalletsScreen() {
                             <Text style={{ fontFamily: 'Manrope_500Medium', color: colors.textMuted, fontSize: 14 }}>{getAccountTypeLabel(account.type)}</Text>
                           </View>
                         </View>
+                        <TouchableOpacity 
+                          onPress={() => handleEditAccount(account)} 
+                          style={{ padding: 8, marginRight: -4 }}
+                          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        >
+                          <Edit2 color={colors.textMuted} size={18} />
+                        </TouchableOpacity>
                       </View>
 
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 16 }}>
@@ -235,6 +250,12 @@ export default function WalletsScreen() {
         visible={modalVisible} 
         onClose={() => setModalVisible(false)} 
         initialData={editingAccount}
+      />
+
+      <AddTransactionModal
+        visible={transactionModalVisible}
+        onClose={() => setTransactionModalVisible(false)}
+        initialAccountId={selectedAccountId}
       />
     </View>
   );

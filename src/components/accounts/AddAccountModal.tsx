@@ -24,7 +24,7 @@ interface Props {
 const ACCOUNT_TYPES = [
   { id: 'cash', label: 'Cash', icon: Wallet },
   { id: 'bank', label: 'Bank', icon: Landmark },
-  { id: 'credit_card', label: 'Credit Card', icon: CreditCard },
+  { id: 'credit_card', label: 'PayLater / Debt', icon: CreditCard },
   { id: 'e_wallet', label: 'E-Wallet', icon: Building2 },
   { id: 'investment', label: 'Investment', icon: TrendingUp },
 ];

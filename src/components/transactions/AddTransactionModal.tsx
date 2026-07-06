@@ -13,9 +13,10 @@ import { toLocalISOWithOffset } from '../../lib/utils';
 interface Props {
   visible: boolean;
   onClose: () => void;
+  initialAccountId?: string | null;
 }
 
-export const AddTransactionModal: React.FC<Props> = ({ visible, onClose }) => {
+export const AddTransactionModal: React.FC<Props> = ({ visible, onClose, initialAccountId }) => {
   const { colors } = useTheme();
   const { user } = useSession();
 
@@ -40,7 +41,7 @@ export const AddTransactionModal: React.FC<Props> = ({ visible, onClose }) => {
     } else {
       resetForm();
     }
-  }, [visible, user]);
+  }, [visible, user, initialAccountId]);
 
   // Handle auto-selection of category when type changes
   useEffect(() => {
@@ -90,11 +91,19 @@ export const AddTransactionModal: React.FC<Props> = ({ visible, onClose }) => {
       setCategories(catRes.data || []);
       
       if (loadedAccounts.length > 0) {
-        if (!selectedAccountId) {
-          setSelectedAccountId(loadedAccounts[0].id);
-        }
-        if (loadedAccounts.length > 1 && !transferToAccountId) {
-          setTransferToAccountId(loadedAccounts[1].id);
+        const defaultId = (initialAccountId && loadedAccounts.some(a => a.id === initialAccountId))
+          ? initialAccountId
+          : (selectedAccountId && loadedAccounts.some(a => a.id === selectedAccountId))
+            ? selectedAccountId
+            : loadedAccounts[0].id;
+        
+        setSelectedAccountId(defaultId);
+        
+        const otherAccounts = loadedAccounts.filter(a => a.id !== defaultId);
+        if (otherAccounts.length > 0) {
+          setTransferToAccountId(otherAccounts[0].id);
+        } else {
+          setTransferToAccountId(null);
         }
       }
     } catch (err: any) {
