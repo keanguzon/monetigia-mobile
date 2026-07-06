@@ -128,11 +128,11 @@ export default function LoginScreen() {
     <View style={{ flex: 1 }}>
       <AuroraBackground />
       <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 24 }}>
-        <GlassCard style={{ width: "100%", maxWidth: 384 }}>
-          <View style={{ marginBottom: 32, alignItems: "center" }}>
+        <GlassCard style={{ width: "100%", maxWidth: 384, paddingVertical: 48, paddingHorizontal: 24 }}>
+          <View style={{ marginBottom: 40, alignItems: "center" }}>
             <Image 
               source={require("../../assets/images/logos/main-logo.png")} 
-              style={{ width: 80, height: 80, borderRadius: 20, marginBottom: 16 }} 
+              style={{ width: 64, height: 64, borderRadius: 16, marginBottom: 20 }} 
               resizeMode="contain" 
             />
             <Text style={{ fontFamily: "Manrope_500Medium", fontSize: 16, color: colors.textMuted, textAlign: "center" }}>
@@ -146,7 +146,7 @@ export default function LoginScreen() {
             </View>
           ) : null}
 
-          <View style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <View style={{ display: "flex", flexDirection: "column", gap: 12, width: "90%", alignSelf: "center" }}>
             <TouchableOpacity
               onPress={() => handleOAuthLogin("google")}
               disabled={isLoading}

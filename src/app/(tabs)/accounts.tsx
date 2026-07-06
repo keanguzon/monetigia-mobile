@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { View, Text, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity, Alert, DeviceEventEmitter, Image } from "react-native";
 import { getSupabase } from "../../../lib/supabase";
-import { Wallet, Landmark, CreditCard, Smartphone, TrendingUp, PiggyBank, Plus, ArchiveX, Edit2 } from "lucide-react-native";
+import { Wallet, Landmark, CreditCard, Smartphone, TrendingUp, PiggyBank, Plus, ArchiveX, Edit2, Trash2 } from "lucide-react-native";
 import { useSession } from "../_layout";
 import { useTheme } from "../../theme/ThemeProvider";
 import { GlassCard } from "../../components/ui/GlassCard";
@@ -64,6 +64,17 @@ export default function WalletsScreen() {
   const [editingAccount, setEditingAccount] = useState<AccountData | null>(null);
   const [transactionModalVisible, setTransactionModalVisible] = useState(false);
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
+  const [previewAfterPay, setPreviewAfterPay] = useState(false);
+
+  const totalMoneyRaw = accounts
+    .filter(a => a.type !== 'credit_card' && a.include_in_networth !== false)
+    .reduce((sum, a) => sum + Number(a.balance || 0), 0);
+  const totalDebtRaw = accounts
+    .filter(a => a.type === 'credit_card' && a.include_in_networth !== false)
+    .reduce((sum, a) => sum + Math.max(0, Number(a.balance || 0)), 0);
+
+  const totalBalance = previewAfterPay ? totalMoneyRaw - totalDebtRaw : totalMoneyRaw;
+  const totalDebt = totalDebtRaw;
 
   const loadAccounts = async () => {
     try {
@@ -73,7 +84,6 @@ export default function WalletsScreen() {
         .from("accounts")
         .select("*")
         .eq("user_id", user.id)
-        .neq("include_in_networth", false) // Filter out archived accounts
         .order("created_at", { ascending: true });
 
       if (data) {
@@ -129,20 +139,20 @@ export default function WalletsScreen() {
     setTransactionModalVisible(true);
   };
 
-  const handleArchive = (accountId: string) => {
+  const handleDelete = (accountId: string) => {
     Alert.alert(
-      "Archive Account",
-      "Are you sure you want to archive this account? It will be hidden from your balances, but historical transactions remain intact.",
+      "Delete Account",
+      "Are you sure you want to delete this account? All associated transactions will be deleted too.",
       [
         { text: "Cancel", style: "cancel" },
         { 
-          text: "Archive", 
+          text: "Delete", 
           style: "destructive",
           onPress: async () => {
             try {
               const { error } = await getSupabase()
                 .from('accounts')
-                .update({ include_in_networth: false })
+                .delete()
                 .eq('id', accountId)
                 .eq('user_id', user!.id);
               
@@ -150,7 +160,7 @@ export default function WalletsScreen() {
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
               DeviceEventEmitter.emit(EVENTS.ACCOUNT_UPDATED);
             } catch (err) {
-              Alert.alert("Error", "Failed to archive account.");
+              Alert.alert("Error", "Failed to delete account.");
             }
           }
         }
@@ -162,9 +172,9 @@ export default function WalletsScreen() {
     return (
       <TouchableOpacity 
         style={{ backgroundColor: '#ef4444', justifyContent: 'center', alignItems: 'center', width: 80, height: '100%', borderTopRightRadius: 24, borderBottomRightRadius: 24 }}
-        onPress={() => handleArchive(accountId)}
+        onPress={() => handleDelete(accountId)}
       >
-        <ArchiveX color="#fff" size={24} />
+        <Trash2 color="#fff" size={24} />
       </TouchableOpacity>
     );
   };
@@ -189,6 +199,48 @@ export default function WalletsScreen() {
               <Plus color="#fff" size={24} />
             </TouchableOpacity>
           </View>
+
+          <GlassCard style={{ padding: 20, marginBottom: 24, gap: 16 }}>
+            <View>
+              <Text style={{ fontFamily: 'Manrope_500Medium', color: colors.textMuted }}>Current Total Balance</Text>
+              <Text style={{ fontFamily: 'BricolageGrotesque_700Bold', fontSize: 32, color: colors.primary }}>
+                {formatCurrency(totalBalance)}
+              </Text>
+              <Text style={{ fontFamily: 'Manrope_400Regular', color: colors.textMuted, fontSize: 13, marginTop: 4 }}>
+                Excluding credit card / debt accounts
+              </Text>
+            </View>
+
+            <View style={{ backgroundColor: 'rgba(255, 255, 255, 0.03)', padding: 16, borderRadius: 16, gap: 12 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={{ fontFamily: 'Manrope_500Medium', color: colors.textMuted, fontSize: 14 }}>Debt balance</Text>
+                <Text style={{ fontFamily: 'BricolageGrotesque_700Bold', color: '#ef4444', fontSize: 16 }}>
+                  -{formatCurrency(totalDebt)}
+                </Text>
+              </View>
+
+              <TouchableOpacity 
+                onPress={() => setPreviewAfterPay(!previewAfterPay)}
+                style={{ 
+                  backgroundColor: previewAfterPay ? colors.primary : 'transparent',
+                  borderWidth: previewAfterPay ? 0 : 1,
+                  borderColor: colors.primary,
+                  paddingVertical: 8,
+                  paddingHorizontal: 16,
+                  borderRadius: 999,
+                  alignSelf: 'flex-start'
+                }}
+              >
+                <Text style={{ 
+                  fontFamily: 'Manrope_500Medium', 
+                  color: previewAfterPay ? '#fff' : colors.primary,
+                  fontSize: 14 
+                }}>
+                  {previewAfterPay ? "Preview: after paying" : "Preview: off"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </GlassCard>
 
           <View style={{ gap: 16 }}>
             {accounts.map((account, idx) => {
