@@ -10,7 +10,7 @@ import { X } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { EVENTS } from '../../lib/events';
 import { toLocalISOWithOffset } from '../../lib/utils';
-
+import { useAccounts, useCategories } from '../../hooks/useData';
 interface Props {
   visible: boolean;
   onClose: () => void;
@@ -29,8 +29,8 @@ export const AddTransactionModal: React.FC<Props> = ({ visible, onClose, initial
   const [debtPaymentDate, setDebtPaymentDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   
-  const [accounts, setAccounts] = useState<any[]>([]);
-  const [categories, setCategories] = useState<any[]>([]);
+  const { data: accounts = [], mutate: mutateAccounts } = useAccounts(user?.id);
+  const { data: categories = [], mutate: mutateCategories } = useCategories(user?.id);
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [transferToAccountId, setTransferToAccountId] = useState<string | null>(null);
@@ -44,101 +44,28 @@ export const AddTransactionModal: React.FC<Props> = ({ visible, onClose, initial
   const isDebtPayment = type === 'transfer' && activeDestinationAccount?.type === 'credit_card';
 
   useEffect(() => {
-    if (visible && user) {
-      loadDependencies();
-    } else {
-      resetForm();
+    if (!visible || accounts.length === 0) {
+      if (!visible) resetForm();
+      return;
     }
-  }, [visible, user, initialAccountId]);
+    
+    const creditAccounts = accounts.filter(a => a.type === 'credit_card');
+    const nonCreditAccounts = accounts.filter(a => a.type !== 'credit_card');
+    const preferredAcc = initialAccountId ? accounts.find(a => a.id === initialAccountId) : null;
 
-  // Handle auto-selection of category when type changes
-  useEffect(() => {
-    if (type !== 'transfer' && categories.length > 0) {
-      const matchingCats = categories.filter(c => c.type === type || c.type === 'both');
-      if (matchingCats.length > 0) {
-        setSelectedCategoryId(matchingCats[0].id);
-      } else {
-        setSelectedCategoryId(null);
-      }
-    } else {
-      setSelectedCategoryId(null);
+    if (preferredAcc && preferredAcc.type === 'credit_card') {
+      setType('transfer');
+      setTransferToAccountId(preferredAcc.id);
+      const defaultSource = nonCreditAccounts.length > 0 ? nonCreditAccounts[0].id : (accounts.find(a => a.id !== preferredAcc.id)?.id || null);
+      setSelectedAccountId(defaultSource);
+    } else if (!selectedAccountId) {
+      const defaultId = (initialAccountId && accounts.some(a => a.id === initialAccountId))
+        ? initialAccountId
+        : nonCreditAccounts.length > 0 ? nonCreditAccounts[0].id : accounts[0].id;
+      setSelectedAccountId(defaultId);
     }
-  }, [type, categories]);
+  }, [visible, user, initialAccountId, accounts]);
 
-  // Exclude source account from destination selection automatically
-  useEffect(() => {
-    if (selectedAccountId && transferToAccountId === selectedAccountId) {
-      const otherAcc = accounts.find(a => a.id !== selectedAccountId);
-      setTransferToAccountId(otherAcc ? otherAcc.id : null);
-    }
-  }, [selectedAccountId, accounts]);
-
-  const resetForm = () => {
-    setType('expense');
-    setAmount('');
-    setDescription('');
-    setDate(new Date());
-    setDebtPaymentDate(new Date());
-    setTransferToAccountId(null);
-    setIsPayLater(false);
-    setErrorMsg('');
-    setIsLoading(false);
-  };
-
-  const loadDependencies = async () => {
-    try {
-      if (!user) return;
-      const [accRes, catRes] = await Promise.all([
-        getSupabase().from('accounts').select('id, name, balance, type').eq('user_id', user.id),
-        getSupabase().from('categories').select('id, name, type').eq('user_id', user.id)
-      ]);
-
-      if (accRes.error) throw accRes.error;
-      if (catRes.error) throw catRes.error;
-
-      const loadedAccounts = accRes.data || [];
-      setAccounts(loadedAccounts);
-      setCategories(catRes.data || []);
-
-      const creditAccounts = loadedAccounts.filter(a => a.type === 'credit_card');
-      const nonCreditAccounts = loadedAccounts.filter(a => a.type !== 'credit_card');
-
-      const preferredAcc = initialAccountId ? loadedAccounts.find(a => a.id === initialAccountId) : null;
-
-      if (preferredAcc && preferredAcc.type === 'credit_card') {
-        setType('transfer');
-        setTransferToAccountId(preferredAcc.id);
-        
-        const defaultSource = nonCreditAccounts.length > 0 ? nonCreditAccounts[0].id : (loadedAccounts.find(a => a.id !== preferredAcc.id)?.id || null);
-        setSelectedAccountId(defaultSource);
-      } else {
-        if (loadedAccounts.length > 0) {
-          const defaultId = (initialAccountId && loadedAccounts.some(a => a.id === initialAccountId))
-            ? initialAccountId
-            : (selectedAccountId && loadedAccounts.some(a => a.id === selectedAccountId))
-              ? selectedAccountId
-              : nonCreditAccounts.length > 0 ? nonCreditAccounts[0].id : loadedAccounts[0].id;
-          
-          setSelectedAccountId(defaultId);
-          
-          const otherAccounts = loadedAccounts.filter(a => a.id !== defaultId);
-          if (otherAccounts.length > 0) {
-            setTransferToAccountId(otherAccounts[0].id);
-          } else {
-            setTransferToAccountId(null);
-          }
-        }
-      }
-
-      if (creditAccounts.length > 0) {
-        setPayLaterAccountId(creditAccounts[0].id);
-      } else {
-        setPayLaterAccountId(null);
-      }
-    } catch (err: any) {
-      setErrorMsg("Failed to load accounts/categories.");
-    }
-  };
 
   const handleSubmit = async () => {
     if (isLoading) return;
