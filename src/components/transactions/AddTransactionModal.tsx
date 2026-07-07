@@ -243,7 +243,7 @@ export const AddTransactionModal: React.FC<Props> = ({ visible, onClose, initial
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 24 }}>
               {errorMsg ? (
                 <View style={styles.errorBox}>
                   <Text style={styles.errorText}>{errorMsg}</Text>
@@ -324,7 +324,7 @@ export const AddTransactionModal: React.FC<Props> = ({ visible, onClose, initial
                       width: 50,
                       height: 30,
                       borderRadius: 15,
-                      backgroundColor: isPayLater ? colors.primary : colors.border,
+                      backgroundColor: isPayLater ? '#ef4444' : colors.border,
                       justifyContent: 'center',
                       paddingHorizontal: 2
                     }}
@@ -371,7 +371,7 @@ export const AddTransactionModal: React.FC<Props> = ({ visible, onClose, initial
                               setSelectedAccountId(acc.id);
                             }
                           }}
-                          style={[styles.pill, { borderColor: colors.border, backgroundColor: isSelected ? colors.primary : 'transparent' }]}
+                          style={[styles.pill, { borderColor: colors.border, backgroundColor: isSelected ? getTypeThemeColor() : 'transparent' }]}
                         >
                           <Text style={{ color: isSelected ? '#fff' : colors.text, fontFamily: 'Manrope_500Medium' }}>{acc.name}</Text>
                         </TouchableOpacity>
@@ -407,17 +407,17 @@ export const AddTransactionModal: React.FC<Props> = ({ visible, onClose, initial
               {type !== 'transfer' && (
                 <View style={[styles.inputGroup, { borderBottomColor: colors.border }]}>
                   <Text style={[styles.label, { color: colors.textMuted }]}>Category</Text>
-                  <View style={styles.pillWrap}>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pillScroll}>
                     {filteredCategories.map(cat => (
                       <TouchableOpacity 
                         key={cat.id} 
                         onPress={() => setSelectedCategoryId(cat.id)}
-                        style={[styles.pill, { borderColor: colors.border, backgroundColor: selectedCategoryId === cat.id ? colors.primary : 'transparent' }]}
+                        style={[styles.pill, { borderColor: colors.border, backgroundColor: selectedCategoryId === cat.id ? getTypeThemeColor() : 'transparent' }]}
                       >
                         <Text style={{ color: selectedCategoryId === cat.id ? '#fff' : colors.text, fontFamily: 'Manrope_500Medium' }}>{cat.name}</Text>
                       </TouchableOpacity>
                     ))}
-                  </View>
+                  </ScrollView>
                 </View>
               )}
 
@@ -463,7 +463,7 @@ const styles = StyleSheet.create({
   overlay: { flex: 1, justifyContent: 'flex-end' },
   backdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)' },
   sheetContainer: { width: '100%', maxHeight: '90%' },
-  sheet: { borderBottomLeftRadius: 0, borderBottomRightRadius: 0, padding: 24, paddingBottom: 40 },
+  sheet: { borderBottomLeftRadius: 0, borderBottomRightRadius: 0, padding: 24, paddingBottom: 40, flex: 1 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
   title: { fontFamily: 'BricolageGrotesque_700Bold', fontSize: 24 },
   closeBtn: { padding: 4 },

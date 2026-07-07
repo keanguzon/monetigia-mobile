@@ -42,6 +42,9 @@ export const GlassCard: React.FC<GlassCardProps> = ({ children, glassStyle = 're
     flexWrap,
     alignContent,
     gap,
+    flex: flatStyle.flex,
+    flexGrow: flatStyle.flexGrow,
+    flexShrink: flatStyle.flexShrink,
   };
 
   return (
