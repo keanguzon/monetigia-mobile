@@ -44,13 +44,17 @@ export const AddTransactionModal: React.FC<Props> = ({ visible, onClose, initial
   const bottomSheetRef = useRef<BottomSheetModal>(null);
 
   useEffect(() => {
+    console.log("[AddTransactionModal] visible:", visible, "user:", !!user, "ref is null?:", !bottomSheetRef.current);
     if (visible) {
       if (!user) {
+        console.log("[AddTransactionModal] closing because user is null!");
         onClose();
         return;
       }
+      console.log("[AddTransactionModal] calling present()");
       bottomSheetRef.current?.present();
     } else {
+      console.log("[AddTransactionModal] calling dismiss()");
       bottomSheetRef.current?.dismiss();
     }
   }, [visible, user]);
