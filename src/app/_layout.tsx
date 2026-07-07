@@ -12,7 +12,6 @@ import { Manrope_400Regular, Manrope_500Medium } from "@expo-google-fonts/manrop
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import * as Updates from "expo-updates";
-import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 
 type SessionContextType = {
   session: Session | null;
@@ -136,17 +135,15 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <ThemeProvider>
-        <BottomSheetModalProvider>
-          <LayoutContent 
-            initialized={initialized && updatesChecked && (fontsLoaded || !!fontError)} 
-            initError={initError || (fontError ? "Failed to load fonts" : null)} 
-            session={session} 
-            updateStep={updateStep}
-            updateError={updateError}
-            onRetryUpdate={checkUpdates}
-            onSkipUpdate={handleSkipUpdate}
-          />
-        </BottomSheetModalProvider>
+        <LayoutContent 
+          initialized={initialized && updatesChecked && (fontsLoaded || !!fontError)} 
+          initError={initError || (fontError ? "Failed to load fonts" : null)} 
+          session={session} 
+          updateStep={updateStep}
+          updateError={updateError}
+          onRetryUpdate={checkUpdates}
+          onSkipUpdate={handleSkipUpdate}
+        />
       </ThemeProvider>
     </GestureHandlerRootView>
   );
