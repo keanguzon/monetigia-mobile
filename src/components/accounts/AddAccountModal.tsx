@@ -280,19 +280,20 @@ export const AddAccountModal: React.FC<Props> = ({ visible, onClose, initialData
           styles.optionCard,
           {
             borderColor: isSelected ? option.color : colors.border,
-            opacity: disabled ? 0.4 : 1,
-            backgroundColor: isSelected ? 'rgba(34, 197, 94, 0.05)' : 'transparent',
+            borderWidth: isSelected ? 2.5 : 1.5,
+            opacity: disabled ? 0.25 : 1,
+            backgroundColor: isSelected ? `${option.color}15` : 'rgba(255,255,255,0.01)',
           }
         ]}
       >
-        <View style={[styles.iconContainer, { borderColor: colors.border }]}>
+        <View style={[styles.iconContainer, { borderColor: isSelected ? option.color : colors.border, borderWidth: isSelected ? 2 : 1.5 }]}>
           {hasLogo ? (
             <Image source={WALLET_LOGOS[option.name]} style={styles.logoImage} resizeMode="contain" />
           ) : (
             getAccountIconFallback(option.type, option.color || colors.primary)
           )}
         </View>
-        <Text style={[styles.optionLabel, { color: colors.text }]} numberOfLines={1}>
+        <Text style={[styles.optionLabel, { color: colors.text, fontWeight: isSelected ? '700' : '500' }]} numberOfLines={1}>
           {option.name}
         </Text>
       </TouchableOpacity>
@@ -344,14 +345,15 @@ export const AddAccountModal: React.FC<Props> = ({ visible, onClose, initialData
                           {
                             borderColor: (isCreatingCustom && customCategory === 'wallet') ? colors.primary : colors.border,
                             borderStyle: 'dashed',
-                            backgroundColor: (isCreatingCustom && customCategory === 'wallet') ? 'rgba(34, 197, 94, 0.05)' : 'transparent',
+                            borderWidth: (isCreatingCustom && customCategory === 'wallet') ? 2.5 : 1.5,
+                            backgroundColor: (isCreatingCustom && customCategory === 'wallet') ? `${colors.primary}15` : 'transparent',
                           }
                         ]}
                       >
-                        <View style={[styles.iconContainer, { borderColor: colors.border, backgroundColor: 'rgba(34, 197, 94, 0.1)' }]}>
+                        <View style={[styles.iconContainer, { borderColor: (isCreatingCustom && customCategory === 'wallet') ? colors.primary : colors.border, borderWidth: (isCreatingCustom && customCategory === 'wallet') ? 2 : 1.5, backgroundColor: 'rgba(34, 197, 94, 0.1)' }]}>
                           <Plus color={colors.primary} size={24} />
                         </View>
-                        <Text style={[styles.optionLabel, { color: colors.text }]}>Custom</Text>
+                        <Text style={[styles.optionLabel, { color: colors.text, fontWeight: (isCreatingCustom && customCategory === 'wallet') ? '700' : '500' }]}>Custom</Text>
                       </TouchableOpacity>
                     </ScrollView>
                   </View>
@@ -376,14 +378,15 @@ export const AddAccountModal: React.FC<Props> = ({ visible, onClose, initialData
                           {
                             borderColor: (isCreatingCustom && customCategory === 'savings') ? colors.primary : colors.border,
                             borderStyle: 'dashed',
-                            backgroundColor: (isCreatingCustom && customCategory === 'savings') ? 'rgba(34, 197, 94, 0.05)' : 'transparent',
+                            borderWidth: (isCreatingCustom && customCategory === 'savings') ? 2.5 : 1.5,
+                            backgroundColor: (isCreatingCustom && customCategory === 'savings') ? `${colors.primary}15` : 'transparent',
                           }
                         ]}
                       >
-                        <View style={[styles.iconContainer, { borderColor: colors.border, backgroundColor: 'rgba(34, 197, 94, 0.1)' }]}>
+                        <View style={[styles.iconContainer, { borderColor: (isCreatingCustom && customCategory === 'savings') ? colors.primary : colors.border, borderWidth: (isCreatingCustom && customCategory === 'savings') ? 2 : 1.5, backgroundColor: 'rgba(34, 197, 94, 0.1)' }]}>
                           <Plus color={colors.primary} size={24} />
                         </View>
-                        <Text style={[styles.optionLabel, { color: colors.text }]}>Custom</Text>
+                        <Text style={[styles.optionLabel, { color: colors.text, fontWeight: (isCreatingCustom && customCategory === 'savings') ? '700' : '500' }]}>Custom</Text>
                       </TouchableOpacity>
                     </ScrollView>
                   </View>
@@ -408,14 +411,15 @@ export const AddAccountModal: React.FC<Props> = ({ visible, onClose, initialData
                           {
                             borderColor: (isCreatingCustom && customCategory === 'paylater') ? colors.primary : colors.border,
                             borderStyle: 'dashed',
-                            backgroundColor: (isCreatingCustom && customCategory === 'paylater') ? 'rgba(34, 197, 94, 0.05)' : 'transparent',
+                            borderWidth: (isCreatingCustom && customCategory === 'paylater') ? 2.5 : 1.5,
+                            backgroundColor: (isCreatingCustom && customCategory === 'paylater') ? `${colors.primary}15` : 'transparent',
                           }
                         ]}
                       >
-                        <View style={[styles.iconContainer, { borderColor: colors.border, backgroundColor: 'rgba(34, 197, 94, 0.1)' }]}>
+                        <View style={[styles.iconContainer, { borderColor: (isCreatingCustom && customCategory === 'paylater') ? colors.primary : colors.border, borderWidth: (isCreatingCustom && customCategory === 'paylater') ? 2 : 1.5, backgroundColor: 'rgba(34, 197, 94, 0.1)' }]}>
                           <Plus color={colors.primary} size={24} />
                         </View>
-                        <Text style={[styles.optionLabel, { color: colors.text }]}>Custom</Text>
+                        <Text style={[styles.optionLabel, { color: colors.text, fontWeight: (isCreatingCustom && customCategory === 'paylater') ? '700' : '500' }]}>Custom</Text>
                       </TouchableOpacity>
                     </ScrollView>
                   </View>
