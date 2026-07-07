@@ -5,7 +5,7 @@ import { Stack, useRouter, useSegments } from "expo-router";
 import { getSupabase } from "../../lib/supabase";
 import { ThemeProvider, useTheme } from "../theme/ThemeProvider";
 import { Session, User } from "@supabase/supabase-js";
-import { View, ActivityIndicator, Text, Animated, TouchableOpacity, Platform } from "react-native";
+import { View, ActivityIndicator, Text, Animated, TouchableOpacity, Platform, LogBox } from "react-native";
 import { useFonts } from "expo-font";
 import { BricolageGrotesque_700Bold } from "@expo-google-fonts/bricolage-grotesque";
 import { Manrope_400Regular, Manrope_500Medium } from "@expo-google-fonts/manrope";
@@ -90,7 +90,14 @@ export default function RootLayout() {
       }
       setUpdateError(null);
       setUpdateStep('checking');
-      const update = await Updates.checkForUpdateAsync();
+      
+      const update = await Promise.race([
+        Updates.checkForUpdateAsync(),
+        new Promise<any>((_, reject) => 
+          setTimeout(() => reject(new Error("Update check timed out. Please check your connection.")), 6000)
+        )
+      ]);
+      
       if (update.isAvailable) {
         setUpdateStep('downloading');
         await Updates.fetchUpdateAsync();
@@ -228,7 +235,7 @@ function LayoutContent({
                 <Animated.View style={{ width: widthInterpolate, height: '100%', backgroundColor: colors.primary }} />
               </View>
 
-              <Text style={{ color: colors.textMuted, fontFamily: 'Manrope_500Medium', fontSize: 13 }} className="text-center">
+              <Text style={{ color: colors.textMuted, fontFamily: 'Manrope_500Medium', fontSize: 13, alignSelf: 'stretch', width: '100%', letterSpacing: Platform.select({ ios: 0, android: 0 }) }} className="text-center">
                 {getStatusText()}
               </Text>
             </>
