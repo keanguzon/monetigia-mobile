@@ -5,7 +5,7 @@ import { Stack, useRouter, useSegments } from "expo-router";
 import { getSupabase } from "../../lib/supabase";
 import { ThemeProvider, useTheme } from "../theme/ThemeProvider";
 import { Session, User } from "@supabase/supabase-js";
-import { View, ActivityIndicator, Text, Animated, TouchableOpacity } from "react-native";
+import { View, ActivityIndicator, Text, Animated, TouchableOpacity, Platform } from "react-native";
 import { useFonts } from "expo-font";
 import { BricolageGrotesque_700Bold } from "@expo-google-fonts/bricolage-grotesque";
 import { Manrope_400Regular, Manrope_500Medium } from "@expo-google-fonts/manrope";
@@ -213,9 +213,8 @@ function LayoutContent({
               color: colors.text, 
               fontFamily: 'BricolageGrotesque_700Bold', 
               fontSize: 40,
-              letterSpacing: -1,
+              letterSpacing: Platform.select({ ios: -1, android: 0 }),
               marginBottom: 24,
-              paddingHorizontal: 10,
               textAlign: 'center'
             }}
           >
