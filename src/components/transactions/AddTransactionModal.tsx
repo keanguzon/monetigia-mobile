@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, TouchableOpacity, TextInput, ActivityIndicator, Platform, StyleSheet, ScrollView, DeviceEventEmitter } from 'react-native';
+import { View, Text, TouchableOpacity, TextInput, ActivityIndicator, Platform, StyleSheet, ScrollView, DeviceEventEmitter, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GlassCard } from '../ui/GlassCard';
 import { useTheme } from '../../theme/ThemeProvider';
@@ -46,6 +46,7 @@ export const AddTransactionModal: React.FC<Props> = ({ visible, onClose, initial
   useEffect(() => {
     console.log("[AddTransactionModal] visible:", visible, "user:", !!user, "ref is null?:", !bottomSheetRef.current);
     if (visible) {
+      Alert.alert("Debug Modal", `visible: ${visible}, user: ${!!user}, ref is null?: ${!bottomSheetRef.current}`);
       if (!user) {
         console.log("[AddTransactionModal] closing because user is null!");
         onClose();
