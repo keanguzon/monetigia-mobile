@@ -8,7 +8,8 @@ export function useAccounts(userId: string | undefined) {
       .from("accounts")
       .select("id, name, balance, type")
       .eq("user_id", userId)
-      .order("name");
+      .order("display_order", { ascending: true })
+      .order("created_at", { ascending: true });
       
     if (error) throw error;
     return data || [];
