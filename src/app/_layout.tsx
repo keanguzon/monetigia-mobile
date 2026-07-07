@@ -11,6 +11,7 @@ import { BricolageGrotesque_700Bold } from "@expo-google-fonts/bricolage-grotesq
 import { Manrope_400Regular, Manrope_500Medium } from "@expo-google-fonts/manrope";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import * as Updates from "expo-updates";
 
 type SessionContextType = {
   session: Session | null;
@@ -30,6 +31,8 @@ export default function RootLayout() {
   const [session, setSession] = useState<Session | null>(null);
   const [initialized, setInitialized] = useState(false);
   const [initError, setInitError] = useState<string | null>(null);
+  const [updatesChecked, setUpdatesChecked] = useState(false);
+  const [updateStatus, setUpdateStatus] = useState("Fetching for updates...");
   const segments = useSegments();
   const router = useRouter();
 
@@ -79,6 +82,30 @@ export default function RootLayout() {
   }, []);
 
   useEffect(() => {
+    async function checkUpdates() {
+      try {
+        if (__DEV__) {
+          setUpdatesChecked(true);
+          return;
+        }
+        const update = await Updates.checkForUpdateAsync();
+        if (update.isAvailable) {
+          setUpdateStatus("Downloading installing updates...");
+          await Updates.fetchUpdateAsync();
+          await Updates.reloadAsync();
+        } else {
+          setUpdateStatus("Up-to-date");
+          setTimeout(() => setUpdatesChecked(true), 500);
+        }
+      } catch (e) {
+        console.warn("Update check failed:", e);
+        setUpdatesChecked(true);
+      }
+    }
+    checkUpdates();
+  }, []);
+
+  useEffect(() => {
     if (!initialized) return;
 
     const inAuthGroup = segments[0] === "(tabs)";
@@ -94,22 +121,28 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <ThemeProvider>
         <LayoutContent 
-          initialized={initialized && (fontsLoaded || !!fontError)} 
+          initialized={initialized && updatesChecked && (fontsLoaded || !!fontError)} 
           initError={initError || (fontError ? "Failed to load fonts" : null)} 
           session={session} 
+          updateStatus={updatesChecked ? null : updateStatus}
         />
       </ThemeProvider>
     </GestureHandlerRootView>
   );
 }
 
-function LayoutContent({ initialized, initError, session }: { initialized: boolean; initError: string | null; session: Session | null }) {
+function LayoutContent({ initialized, initError, session, updateStatus }: { initialized: boolean; initError: string | null; session: Session | null; updateStatus?: string | null }) {
   const { colors } = useTheme();
 
   if (!initialized) {
     return (
       <View className="flex-1 items-center justify-center" style={{ backgroundColor: colors.background }}>
         <ActivityIndicator size="large" color={colors.primary} />
+        {updateStatus && (
+          <Text style={{ color: colors.textMuted, fontFamily: 'Manrope_500Medium' }} className="mt-4 text-sm">
+            {updateStatus}
+          </Text>
+        )}
       </View>
     );
   }
