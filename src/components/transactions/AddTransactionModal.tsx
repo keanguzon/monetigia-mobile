@@ -45,11 +45,15 @@ export const AddTransactionModal: React.FC<Props> = ({ visible, onClose, initial
 
   useEffect(() => {
     if (visible) {
+      if (!user) {
+        onClose();
+        return;
+      }
       bottomSheetRef.current?.present();
     } else {
       bottomSheetRef.current?.dismiss();
     }
-  }, [visible]);
+  }, [visible, user]);
 
   const renderBackdrop = useCallback(
     (props: any) => (
@@ -58,9 +62,10 @@ export const AddTransactionModal: React.FC<Props> = ({ visible, onClose, initial
         disappearsOnIndex={-1}
         appearsOnIndex={0}
         opacity={0.6}
+        pressBehavior={isLoading ? 'none' : 'close'}
       />
     ),
-    []
+    [isLoading]
   );
 
   const GlassBackground = useCallback(
@@ -72,6 +77,14 @@ export const AddTransactionModal: React.FC<Props> = ({ visible, onClose, initial
     ),
     []
   );
+
+  const handleDismiss = () => {
+    if (isLoading) {
+      bottomSheetRef.current?.present();
+      return;
+    }
+    onClose();
+  };
 
   useEffect(() => {
     if (visible && user) {
@@ -272,9 +285,9 @@ export const AddTransactionModal: React.FC<Props> = ({ visible, onClose, initial
       snapPoints={['85%', '98%']}
       backdropComponent={renderBackdrop}
       backgroundComponent={GlassBackground}
-      onDismiss={onClose}
+      onDismiss={handleDismiss}
       enablePanDownToClose={!isLoading}
-      keyboardBehavior="interactive"
+      keyboardBehavior="extend"
       keyboardBlurBehavior="restore"
       handleIndicatorStyle={{ backgroundColor: colors.border, width: 40 }}
       handleStyle={{ borderTopLeftRadius: 24, borderTopRightRadius: 24 }}
@@ -285,7 +298,7 @@ export const AddTransactionModal: React.FC<Props> = ({ visible, onClose, initial
       >
         <View style={styles.header}>
           <Text style={[styles.title, { color: colors.text }]}>Add Transaction</Text>
-          <TouchableOpacity onPress={isLoading ? undefined : onClose} style={styles.closeBtn} disabled={isLoading}>
+          <TouchableOpacity onPress={isLoading ? undefined : () => bottomSheetRef.current?.dismiss()} style={styles.closeBtn} disabled={isLoading}>
             <X color={isLoading ? colors.border : colors.textMuted} size={24} />
           </TouchableOpacity>
         </View>
