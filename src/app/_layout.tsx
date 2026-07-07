@@ -1,11 +1,11 @@
 // @ts-ignore
 import "../../global.css";
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState, useRef } from "react";
 import { Stack, useRouter, useSegments } from "expo-router";
 import { getSupabase } from "../../lib/supabase";
 import { ThemeProvider, useTheme } from "../theme/ThemeProvider";
 import { Session, User } from "@supabase/supabase-js";
-import { View, ActivityIndicator, Text } from "react-native";
+import { View, ActivityIndicator, Text, Animated } from "react-native";
 import { useFonts } from "expo-font";
 import { BricolageGrotesque_700Bold } from "@expo-google-fonts/bricolage-grotesque";
 import { Manrope_400Regular, Manrope_500Medium } from "@expo-google-fonts/manrope";
@@ -32,7 +32,7 @@ export default function RootLayout() {
   const [initialized, setInitialized] = useState(false);
   const [initError, setInitError] = useState<string | null>(null);
   const [updatesChecked, setUpdatesChecked] = useState(false);
-  const [updateStatus, setUpdateStatus] = useState("Fetching for updates...");
+  const [updateStep, setUpdateStep] = useState<'checking' | 'downloading' | 'up-to-date'>('checking');
   const segments = useSegments();
   const router = useRouter();
 
@@ -88,18 +88,20 @@ export default function RootLayout() {
           setUpdatesChecked(true);
           return;
         }
+        setUpdateStep('checking');
         const update = await Updates.checkForUpdateAsync();
         if (update.isAvailable) {
-          setUpdateStatus("Downloading installing updates...");
+          setUpdateStep('downloading');
           await Updates.fetchUpdateAsync();
           await Updates.reloadAsync();
         } else {
-          setUpdateStatus("Up-to-date");
-          setTimeout(() => setUpdatesChecked(true), 500);
+          setUpdateStep('up-to-date');
+          setTimeout(() => setUpdatesChecked(true), 1200);
         }
       } catch (e) {
         console.warn("Update check failed:", e);
-        setUpdatesChecked(true);
+        setUpdateStep('up-to-date');
+        setTimeout(() => setUpdatesChecked(true), 800);
       }
     }
     checkUpdates();
@@ -124,25 +126,93 @@ export default function RootLayout() {
           initialized={initialized && updatesChecked && (fontsLoaded || !!fontError)} 
           initError={initError || (fontError ? "Failed to load fonts" : null)} 
           session={session} 
-          updateStatus={updatesChecked ? null : updateStatus}
+          updateStep={updateStep}
         />
       </ThemeProvider>
     </GestureHandlerRootView>
   );
 }
 
-function LayoutContent({ initialized, initError, session, updateStatus }: { initialized: boolean; initError: string | null; session: Session | null; updateStatus?: string | null }) {
+function LayoutContent({ 
+  initialized, 
+  initError, 
+  session, 
+  updateStep 
+}: { 
+  initialized: boolean; 
+  initError: string | null; 
+  session: Session | null; 
+  updateStep: 'checking' | 'downloading' | 'up-to-date';
+}) {
   const { colors } = useTheme();
+  const progress = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (!initialized) {
+      if (updateStep === 'checking') {
+        Animated.timing(progress, {
+          toValue: 0.3,
+          duration: 1000,
+          useNativeDriver: false,
+        }).start();
+      } else if (updateStep === 'downloading') {
+        Animated.timing(progress, {
+          toValue: 0.8,
+          duration: 3000,
+          useNativeDriver: false,
+        }).start();
+      } else if (updateStep === 'up-to-date') {
+        Animated.timing(progress, {
+          toValue: 1,
+          duration: 800,
+          useNativeDriver: false,
+        }).start();
+      }
+    }
+  }, [updateStep, initialized]);
+
+  const widthInterpolate = progress.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0%', '100%'],
+  });
+
+  const getStatusText = () => {
+    switch (updateStep) {
+      case 'checking':
+        return 'Checking for updates...';
+      case 'downloading':
+        return 'Installing updates...';
+      case 'up-to-date':
+        return 'App is up to date!';
+      default:
+        return 'Loading...';
+    }
+  };
 
   if (!initialized) {
     return (
-      <View className="flex-1 items-center justify-center" style={{ backgroundColor: colors.background }}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        {updateStatus && (
-          <Text style={{ color: colors.textMuted, fontFamily: 'Manrope_500Medium' }} className="mt-4 text-sm">
-            {updateStatus}
+      <View className="flex-1 items-center justify-center p-6" style={{ backgroundColor: colors.background }}>
+        <View className="items-center">
+          <Text 
+            style={{ 
+              color: colors.text, 
+              fontFamily: 'BricolageGrotesque_700Bold', 
+              fontSize: 40,
+              letterSpacing: -1,
+              marginBottom: 24
+            }}
+          >
+            Monetigia
           </Text>
-        )}
+          
+          <View style={{ width: 180, height: 4, backgroundColor: colors.border, borderRadius: 2, overflow: 'hidden', marginBottom: 16 }}>
+            <Animated.View style={{ width: widthInterpolate, height: '100%', backgroundColor: colors.primary }} />
+          </View>
+
+          <Text style={{ color: colors.textMuted, fontFamily: 'Manrope_500Medium', fontSize: 13 }} className="text-center">
+            {getStatusText()}
+          </Text>
+        </View>
       </View>
     );
   }
