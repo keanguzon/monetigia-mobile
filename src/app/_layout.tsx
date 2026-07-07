@@ -215,7 +215,8 @@ function LayoutContent({
               fontSize: 40,
               letterSpacing: Platform.select({ ios: -1, android: 0 }),
               marginBottom: 24,
-              textAlign: 'center'
+              textAlign: 'center',
+              alignSelf: 'stretch',
             }}
           >
             Monetigia
