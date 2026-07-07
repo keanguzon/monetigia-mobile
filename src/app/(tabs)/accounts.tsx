@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { View, Text, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity, Alert, DeviceEventEmitter, Image } from "react-native";
 import { getSupabase } from "../../../lib/supabase";
-import { Wallet, Landmark, CreditCard, Smartphone, TrendingUp, PiggyBank, Plus, ArchiveX, Edit2, Trash2 } from "lucide-react-native";
+import { Wallet, Landmark, CreditCard, Smartphone, TrendingUp, PiggyBank, Plus, ArchiveX, Edit2, Trash2, ChevronUp, ChevronDown, ArrowUpDown, X, Check } from "lucide-react-native";
 import { useSession } from "../_layout";
 import { useTheme } from "../../theme/ThemeProvider";
 import { GlassCard } from "../../components/ui/GlassCard";
@@ -68,6 +68,45 @@ export default function WalletsScreen() {
   const [debtByMonth, setDebtByMonth] = useState<Record<string, number>>({});
   const [selectedDebtMonths, setSelectedDebtMonths] = useState<string[]>([]);
   const [isDebtLoading, setIsDebtLoading] = useState(false);
+  const [isEditingOrder, setIsEditingOrder] = useState(false);
+
+  const moveAccount = (index: number, direction: 'up' | 'down') => {
+    if (direction === 'up' && index === 0) return;
+    if (direction === 'down' && index === accounts.length - 1) return;
+
+    const newAccounts = [...accounts];
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    
+    // Swap
+    const temp = newAccounts[index];
+    newAccounts[index] = newAccounts[targetIndex];
+    newAccounts[targetIndex] = temp;
+
+    setAccounts(newAccounts);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
+
+  const saveAccountOrder = async () => {
+    if (!user) return;
+    setIsLoading(true);
+    try {
+      const updates = accounts.map((acc, idx) =>
+        getSupabase()
+          .from("accounts")
+          .update({ display_order: idx })
+          .eq("id", acc.id)
+          .eq("user_id", user.id)
+      );
+
+      await Promise.all(updates);
+      setIsEditingOrder(false);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (err) {
+      Alert.alert("Error", "Failed to save wallet order.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const totalMoneyRaw = accounts
     .filter(a => a.type !== 'credit_card' && a.include_in_networth !== false)
@@ -91,14 +130,25 @@ export default function WalletsScreen() {
     try {
       if (!user) return;
 
-      const { data } = await getSupabase()
+      const { data, error } = await getSupabase()
         .from("accounts")
         .select("*")
         .eq("user_id", user.id)
-        .order("created_at", { ascending: true });
+        .order("display_order", { ascending: true })
+        .order("created_at", { ascending: false });
 
-      if (data) {
-        let accountsList = [...data];
+      let finalData = data;
+      if (error) {
+        const { data: fallbackData } = await getSupabase()
+          .from("accounts")
+          .select("*")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false });
+        finalData = fallbackData;
+      }
+
+      if (finalData) {
+        let accountsList = [...finalData];
         const creditIds = accountsList.filter((a: any) => a.type === "credit_card").map((a: any) => a.id);
         
         if (creditIds.length > 0) {
@@ -301,13 +351,47 @@ export default function WalletsScreen() {
       >
         <View style={{ padding: 24, paddingTop: 64 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
-            <View>
-              <Text style={{ fontFamily: 'BricolageGrotesque_700Bold', fontSize: 30, color: colors.text }}>Wallets</Text>
-              <Text style={{ fontFamily: 'Manrope_400Regular', color: colors.textMuted, marginTop: 4 }}>Your wallets and balances</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontFamily: 'BricolageGrotesque_700Bold', fontSize: 30, color: colors.text }}>
+                {isEditingOrder ? 'Reorder' : 'Wallets'}
+              </Text>
+              <Text style={{ fontFamily: 'Manrope_400Regular', color: colors.textMuted, marginTop: 4 }}>
+                {isEditingOrder ? 'Adjust the order of your wallets' : 'Your wallets and balances'}
+              </Text>
             </View>
-            <TouchableOpacity onPress={handleAddAccount} style={{ backgroundColor: colors.primary, padding: 12, borderRadius: 999 }}>
-              <Plus color="#fff" size={24} />
-            </TouchableOpacity>
+            {isEditingOrder ? (
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <TouchableOpacity 
+                  onPress={() => {
+                    setIsEditingOrder(false);
+                    loadAccounts(); // reload original order
+                  }} 
+                  style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', padding: 12, borderRadius: 999 }}
+                >
+                  <X color="#ef4444" size={24} />
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  onPress={saveAccountOrder} 
+                  style={{ backgroundColor: colors.primary, padding: 12, borderRadius: 999 }}
+                >
+                  <Check color="#fff" size={24} />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                {accounts.length > 1 && (
+                  <TouchableOpacity 
+                    onPress={() => setIsEditingOrder(true)} 
+                    style={{ borderWidth: 1, borderColor: colors.border, padding: 12, borderRadius: 999 }}
+                  >
+                    <ArrowUpDown color={colors.text} size={24} />
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity onPress={handleAddAccount} style={{ backgroundColor: colors.primary, padding: 12, borderRadius: 999 }}>
+                  <Plus color="#fff" size={24} />
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
 
           <GlassCard style={{ padding: 20, marginBottom: 24, gap: 16 }}>
@@ -436,8 +520,8 @@ export default function WalletsScreen() {
 
               return (
                 <AnimatedListItem key={account.id} delay={idx * 80}>
-                  <Swipeable renderRightActions={() => renderRightActions(account.id)} overshootRight={false}>
-                  <TouchableOpacity activeOpacity={0.8} onPress={() => handleTransact(account.id)}>
+                  <Swipeable enabled={!isEditingOrder} renderRightActions={() => renderRightActions(account.id)} overshootRight={false}>
+                  <TouchableOpacity activeOpacity={0.8} onPress={() => handleTransact(account.id)} disabled={isEditingOrder}>
                     <GlassCard style={{ padding: 20 }}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
@@ -449,13 +533,36 @@ export default function WalletsScreen() {
                             <Text style={{ fontFamily: 'Manrope_500Medium', color: colors.textMuted, fontSize: 14 }}>{getAccountTypeLabel(account.type)}</Text>
                           </View>
                         </View>
-                        <TouchableOpacity 
-                          onPress={() => handleEditAccount(account)} 
-                          style={{ padding: 8, marginRight: -4 }}
-                          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                        >
-                          <Edit2 color={colors.textMuted} size={18} />
-                        </TouchableOpacity>
+                        {isEditingOrder ? (
+                          <View style={{ flexDirection: 'row', gap: 4 }}>
+                            {idx > 0 && (
+                              <TouchableOpacity 
+                                onPress={() => moveAccount(idx, 'up')} 
+                                style={{ padding: 8 }}
+                                hitSlop={{ top: 10, bottom: 10, left: 5, right: 5 }}
+                              >
+                                <ChevronUp color={colors.text} size={20} />
+                              </TouchableOpacity>
+                            )}
+                            {idx < accounts.length - 1 && (
+                              <TouchableOpacity 
+                                onPress={() => moveAccount(idx, 'down')} 
+                                style={{ padding: 8 }}
+                                hitSlop={{ top: 10, bottom: 10, left: 5, right: 5 }}
+                              >
+                                <ChevronDown color={colors.text} size={20} />
+                              </TouchableOpacity>
+                            )}
+                          </View>
+                        ) : (
+                          <TouchableOpacity 
+                            onPress={() => handleEditAccount(account)} 
+                            style={{ padding: 8, marginRight: -4 }}
+                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                          >
+                            <Edit2 color={colors.textMuted} size={18} />
+                          </TouchableOpacity>
+                        )}
                       </View>
 
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 16 }}>
@@ -489,6 +596,7 @@ export default function WalletsScreen() {
         visible={modalVisible} 
         onClose={() => setModalVisible(false)} 
         initialData={editingAccount}
+        existingAccounts={accounts}
       />
 
       <AddTransactionModal

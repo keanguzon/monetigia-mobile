@@ -29,3 +29,16 @@ export function getInitials(name: string): string {
   if (!name) return "?";
   return name.split(" ").map(n => n[0]).join("").toUpperCase().substring(0, 2);
 }
+
+export function parseNonNegativeAmount(value: string | number): number | null {
+  const parsed = typeof value === "string" ? parseFloat(value.replace(/,/g, "")) : Number(value);
+  if (isNaN(parsed) || !Number.isFinite(parsed) || parsed < 0) return null;
+  return Number(parsed.toFixed(2));
+}
+
+export function sanitizeColor(color: string): string {
+  if (!color || typeof color !== "string") return "#10b981";
+  const hexPattern = /^#[0-9A-Fa-f]{6}$/;
+  if (hexPattern.test(color)) return color.toLowerCase();
+  return "#10b981";
+}
