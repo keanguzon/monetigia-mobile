@@ -5,7 +5,7 @@ import { Stack, useRouter, useSegments } from "expo-router";
 import { getSupabase } from "../../lib/supabase";
 import { ThemeProvider, useTheme } from "../theme/ThemeProvider";
 import { Session, User } from "@supabase/supabase-js";
-import { View, ActivityIndicator, Text, Animated } from "react-native";
+import { View, ActivityIndicator, Text, Animated, TouchableOpacity } from "react-native";
 import { useFonts } from "expo-font";
 import { BricolageGrotesque_700Bold } from "@expo-google-fonts/bricolage-grotesque";
 import { Manrope_400Regular, Manrope_500Medium } from "@expo-google-fonts/manrope";
@@ -33,6 +33,7 @@ export default function RootLayout() {
   const [initError, setInitError] = useState<string | null>(null);
   const [updatesChecked, setUpdatesChecked] = useState(false);
   const [updateStep, setUpdateStep] = useState<'checking' | 'downloading' | 'up-to-date'>('checking');
+  const [updateError, setUpdateError] = useState<string | null>(null);
   const segments = useSegments();
   const router = useRouter();
 
@@ -81,31 +82,36 @@ export default function RootLayout() {
     return () => subscription?.unsubscribe();
   }, []);
 
-  useEffect(() => {
-    async function checkUpdates() {
-      try {
-        if (__DEV__) {
-          setUpdatesChecked(true);
-          return;
-        }
-        setUpdateStep('checking');
-        const update = await Updates.checkForUpdateAsync();
-        if (update.isAvailable) {
-          setUpdateStep('downloading');
-          await Updates.fetchUpdateAsync();
-          await Updates.reloadAsync();
-        } else {
-          setUpdateStep('up-to-date');
-          setTimeout(() => setUpdatesChecked(true), 1200);
-        }
-      } catch (e) {
-        console.warn("Update check failed:", e);
-        setUpdateStep('up-to-date');
-        setTimeout(() => setUpdatesChecked(true), 800);
+  const checkUpdates = async () => {
+    try {
+      if (__DEV__) {
+        setUpdatesChecked(true);
+        return;
       }
+      setUpdateError(null);
+      setUpdateStep('checking');
+      const update = await Updates.checkForUpdateAsync();
+      if (update.isAvailable) {
+        setUpdateStep('downloading');
+        await Updates.fetchUpdateAsync();
+        await Updates.reloadAsync();
+      } else {
+        setUpdateStep('up-to-date');
+        setTimeout(() => setUpdatesChecked(true), 1200);
+      }
+    } catch (e: any) {
+      console.warn("Update check failed:", e);
+      setUpdateError(e.message || String(e));
     }
+  };
+
+  useEffect(() => {
     checkUpdates();
   }, []);
+
+  const handleSkipUpdate = () => {
+    setUpdatesChecked(true);
+  };
 
   useEffect(() => {
     if (!initialized) return;
@@ -127,6 +133,9 @@ export default function RootLayout() {
           initError={initError || (fontError ? "Failed to load fonts" : null)} 
           session={session} 
           updateStep={updateStep}
+          updateError={updateError}
+          onRetryUpdate={checkUpdates}
+          onSkipUpdate={handleSkipUpdate}
         />
       </ThemeProvider>
     </GestureHandlerRootView>
@@ -137,12 +146,18 @@ function LayoutContent({
   initialized, 
   initError, 
   session, 
-  updateStep 
+  updateStep,
+  updateError,
+  onRetryUpdate,
+  onSkipUpdate
 }: { 
   initialized: boolean; 
   initError: string | null; 
   session: Session | null; 
   updateStep: 'checking' | 'downloading' | 'up-to-date';
+  updateError: string | null;
+  onRetryUpdate: () => void;
+  onSkipUpdate: () => void;
 }) {
   const { colors } = useTheme();
   const progress = useRef(new Animated.Value(0)).current;
@@ -192,7 +207,7 @@ function LayoutContent({
   if (!initialized) {
     return (
       <View className="flex-1 items-center justify-center p-6" style={{ backgroundColor: colors.background }}>
-        <View className="items-center">
+        <View className="items-center w-full max-w-sm">
           <Text 
             style={{ 
               color: colors.text, 
@@ -205,13 +220,38 @@ function LayoutContent({
             {"Monetigia "}
           </Text>
           
-          <View style={{ width: 180, height: 4, backgroundColor: colors.border, borderRadius: 2, overflow: 'hidden', marginBottom: 16 }}>
-            <Animated.View style={{ width: widthInterpolate, height: '100%', backgroundColor: colors.primary }} />
-          </View>
+          {!updateError ? (
+            <>
+              <View style={{ width: 180, height: 4, backgroundColor: colors.border, borderRadius: 2, overflow: 'hidden', marginBottom: 16 }}>
+                <Animated.View style={{ width: widthInterpolate, height: '100%', backgroundColor: colors.primary }} />
+              </View>
 
-          <Text style={{ color: colors.textMuted, fontFamily: 'Manrope_500Medium', fontSize: 13 }} className="text-center">
-            {getStatusText()}
-          </Text>
+              <Text style={{ color: colors.textMuted, fontFamily: 'Manrope_500Medium', fontSize: 13 }} className="text-center">
+                {getStatusText()}
+              </Text>
+            </>
+          ) : (
+            <View style={{ width: '100%', backgroundColor: 'rgba(239, 68, 68, 0.08)', borderRadius: 12, borderWidth: 1, borderColor: 'rgba(239, 68, 68, 0.2)', padding: 16, marginTop: 8, alignItems: 'center' }}>
+              <Text style={{ color: '#ef4444', fontFamily: 'BricolageGrotesque_700Bold', fontSize: 14, marginBottom: 4 }}>Update Check Failed</Text>
+              <Text style={{ color: colors.textMuted, fontFamily: 'Manrope_400Regular', fontSize: 12, textAlign: 'center', marginBottom: 16 }}>{updateError}</Text>
+              
+              <View style={{ flexDirection: 'row', gap: 12, justifyContent: 'center', width: '100%' }}>
+                <TouchableOpacity 
+                  onPress={onRetryUpdate}
+                  style={{ backgroundColor: colors.primary, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 }}
+                >
+                  <Text style={{ color: '#fff', fontFamily: 'Manrope_500Medium', fontSize: 13 }}>Retry</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity 
+                  onPress={onSkipUpdate}
+                  style={{ borderWidth: 1, borderColor: colors.border, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 }}
+                >
+                  <Text style={{ color: colors.text, fontFamily: 'Manrope_500Medium', fontSize: 13 }}>Skip</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
         </View>
       </View>
     );
