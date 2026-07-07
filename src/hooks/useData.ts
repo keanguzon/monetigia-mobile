@@ -1,5 +1,5 @@
 import useSWR from 'swr';
-import { getSupabase } from '../lib/supabase';
+import { getSupabase } from '../../lib/supabase';
 
 export function useAccounts(userId: string | undefined) {
   return useSWR(userId ? `accounts-${userId}` : null, async () => {
