@@ -202,7 +202,7 @@ function LayoutContent({
               marginBottom: 24
             }}
           >
-            Monetigia
+            {"Monetigia "}
           </Text>
           
           <View style={{ width: 180, height: 4, backgroundColor: colors.border, borderRadius: 2, overflow: 'hidden', marginBottom: 16 }}>
