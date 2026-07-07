@@ -1,5 +1,6 @@
-import React, { useEffect, useRef } from 'react';
-import { Animated, View, StyleSheet, ScrollView, ViewStyle, Dimensions, Platform } from 'react-native';
+import React, { useEffect } from 'react';
+import { View, StyleSheet, ScrollView, ViewStyle, Dimensions, Platform } from 'react-native';
+import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { GlassCard } from './GlassCard';
 import { useTheme } from '../../theme/ThemeProvider';
@@ -20,23 +21,24 @@ export const Skeleton: React.FC<SkeletonProps> = ({
   style,
 }) => {
   const { isDark } = useTheme();
-  const animatedValue = useRef(new Animated.Value(0)).current;
+  const progress = useSharedValue(0);
 
   useEffect(() => {
-    const animation = Animated.loop(
-      Animated.timing(animatedValue, {
-        toValue: 1,
+    progress.value = withRepeat(
+      withTiming(1, {
         duration: 1600,
-        useNativeDriver: true,
-      })
+        easing: Easing.linear,
+      }),
+      -1,
+      false
     );
-    animation.start();
-    return () => animation.stop();
-  }, [animatedValue]);
+  }, []);
 
-  const translateX = animatedValue.interpolate({
-    inputRange: [0, 1],
-    outputRange: [-SCREEN_WIDTH * 0.5, SCREEN_WIDTH * 0.8],
+  const animatedStyle = useAnimatedStyle(() => {
+    const translateX = -SCREEN_WIDTH * 0.5 + progress.value * (SCREEN_WIDTH * 1.3);
+    return {
+      transform: [{ translateX }],
+    };
   });
 
   const baseColor = isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.04)';
@@ -60,9 +62,9 @@ export const Skeleton: React.FC<SkeletonProps> = ({
         style={[
           StyleSheet.absoluteFill,
           {
-            transform: [{ translateX }],
             width: SCREEN_WIDTH * 0.5,
           },
+          animatedStyle,
         ]}
       >
         <LinearGradient
