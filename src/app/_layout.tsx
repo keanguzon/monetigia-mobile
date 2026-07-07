@@ -214,10 +214,12 @@ function LayoutContent({
               fontFamily: 'BricolageGrotesque_700Bold', 
               fontSize: 40,
               letterSpacing: -1,
-              marginBottom: 24
+              marginBottom: 24,
+              paddingHorizontal: 10,
+              textAlign: 'center'
             }}
           >
-            {"Monetigia "}
+            Monetigia
           </Text>
           
           {!updateError ? (
