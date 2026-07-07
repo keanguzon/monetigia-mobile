@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Modal, View, Text, TouchableOpacity, TextInput, ActivityIndicator, KeyboardAvoidingView, Platform, StyleSheet, ScrollView, DeviceEventEmitter, Alert } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GlassCard } from '../ui/GlassCard';
 import { useTheme } from '../../theme/ThemeProvider';
 import { getSupabase } from '../../../lib/supabase';
@@ -32,6 +33,7 @@ const ACCOUNT_TYPES = [
 export const AddAccountModal: React.FC<Props> = ({ visible, onClose, initialData }) => {
   const { colors } = useTheme();
   const { user } = useSession();
+  const insets = useSafeAreaInsets();
 
   const [name, setName] = useState('');
   const [type, setType] = useState('cash');
@@ -116,7 +118,7 @@ export const AddAccountModal: React.FC<Props> = ({ visible, onClose, initialData
       DeviceEventEmitter.emit(EVENTS.TRANSACTION_ADDED); // Refresh dashboard too
       onClose();
     } catch (err: any) {
-      setErrorMsg(err.message || "Failed to save account.");
+      setErrorMsg(err.message || "Failed to save wallet.");
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
       setIsLoading(false);
@@ -129,17 +131,17 @@ export const AddAccountModal: React.FC<Props> = ({ visible, onClose, initialData
         <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={isLoading ? undefined : onClose} disabled={isLoading} />
         
         <View style={styles.sheetContainer}>
-          <GlassCard style={styles.sheet} glassStyle="regular">
+          <GlassCard style={[styles.sheet, { paddingBottom: Math.max(40, insets.bottom + 16) }]} glassStyle="regular">
             <View style={styles.header}>
               <Text style={[styles.title, { color: colors.text }]}>
-                {isEditMode ? 'Edit Account' : 'Add Account'}
+                {isEditMode ? 'Edit Wallet' : 'Add Wallet'}
               </Text>
               <TouchableOpacity onPress={isLoading ? undefined : onClose} style={styles.closeBtn} disabled={isLoading}>
                 <X color={isLoading ? colors.border : colors.textMuted} size={24} />
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <ScrollView showsVerticalScrollIndicator={false} style={{ flexShrink: 1 }}>
               {errorMsg ? (
                 <View style={styles.errorBox}>
                   <Text style={styles.errorText}>{errorMsg}</Text>
@@ -148,7 +150,7 @@ export const AddAccountModal: React.FC<Props> = ({ visible, onClose, initialData
 
               {/* Account Type Selection */}
               <View style={[styles.inputGroup, { borderBottomColor: colors.border }]}>
-                <Text style={[styles.label, { color: colors.textMuted }]}>Account Type</Text>
+                <Text style={[styles.label, { color: colors.textMuted }]}>Wallet Type</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pillScroll}>
                   {ACCOUNT_TYPES.map(accType => {
                     const isSelected = type === accType.id;
@@ -181,7 +183,7 @@ export const AddAccountModal: React.FC<Props> = ({ visible, onClose, initialData
 
               {/* Account Name */}
               <View style={[styles.inputGroup, { borderBottomColor: colors.border }]}>
-                <Text style={[styles.label, { color: colors.textMuted }]}>Account Name</Text>
+                <Text style={[styles.label, { color: colors.textMuted }]}>Wallet Name</Text>
                 <TextInput
                   style={[styles.input, { color: colors.text, fontSize: 24 }]}
                   placeholder="e.g. BDO Savings"
@@ -218,7 +220,7 @@ export const AddAccountModal: React.FC<Props> = ({ visible, onClose, initialData
                 onPress={handleSubmit}
                 disabled={isLoading}
               >
-                {isLoading ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitText}>Save Account</Text>}
+                {isLoading ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitText}>Save Wallet</Text>}
               </TouchableOpacity>
               
             </ScrollView>
@@ -232,8 +234,8 @@ export const AddAccountModal: React.FC<Props> = ({ visible, onClose, initialData
 const styles = StyleSheet.create({
   overlay: { flex: 1, justifyContent: 'flex-end' },
   backdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)' },
-  sheetContainer: { width: '100%', maxHeight: '90%' },
-  sheet: { borderBottomLeftRadius: 0, borderBottomRightRadius: 0, padding: 24, paddingBottom: 40 },
+  sheetContainer: { width: '100%', maxHeight: '90%', flexShrink: 1 },
+  sheet: { borderBottomLeftRadius: 0, borderBottomRightRadius: 0, padding: 24, flexShrink: 1 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
   title: { fontFamily: 'BricolageGrotesque_700Bold', fontSize: 24 },
   closeBtn: { padding: 4 },

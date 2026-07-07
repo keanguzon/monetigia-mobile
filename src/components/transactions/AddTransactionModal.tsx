@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Modal, View, Text, TouchableOpacity, TextInput, ActivityIndicator, KeyboardAvoidingView, Platform, StyleSheet, ScrollView, DeviceEventEmitter } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GlassCard } from '../ui/GlassCard';
 import { useTheme } from '../../theme/ThemeProvider';
 import { getSupabase } from '../../../lib/supabase';
@@ -19,6 +20,7 @@ interface Props {
 export const AddTransactionModal: React.FC<Props> = ({ visible, onClose, initialAccountId }) => {
   const { colors } = useTheme();
   const { user } = useSession();
+  const insets = useSafeAreaInsets();
 
   const [type, setType] = useState<'expense' | 'income' | 'transfer'>('expense');
   const [amount, setAmount] = useState('');
@@ -235,7 +237,7 @@ export const AddTransactionModal: React.FC<Props> = ({ visible, onClose, initial
         <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={isLoading ? undefined : onClose} disabled={isLoading} />
         
         <View style={styles.sheetContainer}>
-          <GlassCard style={styles.sheet} glassStyle="regular">
+          <GlassCard style={[styles.sheet, { paddingBottom: Math.max(40, insets.bottom + 16) }]} glassStyle="regular">
             <View style={styles.header}>
               <Text style={[styles.title, { color: colors.text }]}>Add Transaction</Text>
               <TouchableOpacity onPress={isLoading ? undefined : onClose} style={styles.closeBtn} disabled={isLoading}>
@@ -463,7 +465,7 @@ const styles = StyleSheet.create({
   overlay: { flex: 1, justifyContent: 'flex-end' },
   backdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)' },
   sheetContainer: { width: '100%', maxHeight: '90%', flexShrink: 1 },
-  sheet: { borderBottomLeftRadius: 0, borderBottomRightRadius: 0, padding: 24, paddingBottom: 40, flexShrink: 1 },
+  sheet: { borderBottomLeftRadius: 0, borderBottomRightRadius: 0, padding: 24, flexShrink: 1 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
   title: { fontFamily: 'BricolageGrotesque_700Bold', fontSize: 24 },
   closeBtn: { padding: 4 },
