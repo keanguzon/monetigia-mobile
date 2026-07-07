@@ -26,6 +26,7 @@ export const AddTransactionModal: React.FC<Props> = ({ visible, onClose, initial
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [date, setDate] = useState(new Date());
+  const [debtPaymentDate, setDebtPaymentDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   
   const [accounts, setAccounts] = useState<any[]>([]);
@@ -38,6 +39,9 @@ export const AddTransactionModal: React.FC<Props> = ({ visible, onClose, initial
   
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+
+  const activeDestinationAccount = transferToAccountId ? accounts.find(a => a.id === transferToAccountId) : null;
+  const isDebtPayment = type === 'transfer' && activeDestinationAccount?.type === 'credit_card';
 
   useEffect(() => {
     if (visible && user) {
@@ -74,6 +78,7 @@ export const AddTransactionModal: React.FC<Props> = ({ visible, onClose, initial
     setAmount('');
     setDescription('');
     setDate(new Date());
+    setDebtPaymentDate(new Date());
     setTransferToAccountId(null);
     setIsPayLater(false);
     setErrorMsg('');
@@ -153,11 +158,20 @@ export const AddTransactionModal: React.FC<Props> = ({ visible, onClose, initial
       return;
     }
     const effectiveAccountId = (type === 'expense' && isPayLater) ? payLaterAccountId : selectedAccountId;
+    const sourceAccount = accounts.find(a => a.id === effectiveAccountId);
 
     if (!effectiveAccountId) {
       setErrorMsg("Please select a source account.");
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       return;
+    }
+
+    if (sourceAccount && sourceAccount.type !== 'credit_card') {
+      if ((type === 'expense' || type === 'transfer') && numericAmount > sourceAccount.balance) {
+        setErrorMsg(`Not enough money in ${sourceAccount.name}. Available: ₱${sourceAccount.balance.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        return;
+      }
     }
     if (type !== 'transfer' && !selectedCategoryId) {
       setErrorMsg("Please select a category.");
@@ -180,14 +194,79 @@ export const AddTransactionModal: React.FC<Props> = ({ visible, onClose, initial
     setIsLoading(true);
     
     try {
-      const localDateWithOffset = toLocalISOWithOffset(date);
+      let localDateWithOffset = toLocalISOWithOffset(date);
+
+      if (isDebtPayment) {
+        // Month-level validation for debt
+        const creditId = transferToAccountId!;
+        const selectedYear = debtPaymentDate.getFullYear();
+        const selectedMonth = debtPaymentDate.getMonth(); // 0-indexed
+        
+        // Start of selected month
+        const start = new Date(selectedYear, selectedMonth, 1);
+        const startStr = toLocalISOWithOffset(start).split('T')[0]; // YYYY-MM-DD
+        
+        // Start of next month
+        const end = new Date(selectedYear, selectedMonth + 1, 1);
+        const endStr = toLocalISOWithOffset(end).split('T')[0];
+
+        const { data: monthTx, error: monthTxErr } = await getSupabase()
+          .from("transactions")
+          .select("account_id, type, amount, date, transfer_to_account_id")
+          .eq("user_id", user.id)
+          .gte("date", startStr)
+          .lt("date", endStr)
+          .or(`account_id.eq.${creditId},transfer_to_account_id.eq.${creditId}`);
+
+        if (monthTxErr) throw monthTxErr;
+
+        let monthDebt = 0;
+        (monthTx || []).forEach((t: any) => {
+          const amtNum = Number(t?.amount || 0);
+          const isCreditSource = t?.account_id === creditId;
+          const isCreditDestination = t?.transfer_to_account_id === creditId;
+
+          if (t.type === "expense" && isCreditSource) monthDebt += amtNum;
+          else if (t.type === "income" && isCreditSource) monthDebt -= amtNum;
+          else if (t.type === "transfer") {
+            if (isCreditDestination) monthDebt -= amtNum;
+            if (isCreditSource) monthDebt += amtNum;
+          }
+        });
+
+        monthDebt = Math.max(0, monthDebt);
+        
+        const label = new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' }).format(debtPaymentDate);
+
+        if (monthDebt <= 0) {
+          setErrorMsg(`There is no remaining debt for ${label}.`);
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+          setIsLoading(false);
+          return;
+        }
+        
+        if (numericAmount > monthDebt + 0.001) { // Adding small epsilon for float comparison
+          setErrorMsg(`Payment too large. Max for ${label} is ₱${monthDebt.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}.`);
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+          setIsLoading(false);
+          return;
+        }
+
+        // Force transaction date to the 1st of the selected month
+        localDateWithOffset = startStr;
+        
+        // Auto-fill description if empty
+        if (!description.trim()) {
+          setDescription(`Debt - ${label}`);
+        }
+      }
 
       if (type === 'transfer') {
         // Execute Atomic Transfer RPC
         const { error: rpcError } = await getSupabase().rpc('add_transfer_atomic', {
           p_user_id: user?.id,
           p_amount: numericAmount,
-          p_description: description.trim() || 'Transfer',
+          p_description: isDebtPayment && !description.trim() ? `Debt - ${new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' }).format(debtPaymentDate)}` : (description.trim() || 'Transfer'),
           p_date: localDateWithOffset,
           p_account_id: effectiveAccountId,
           p_transfer_to_account_id: transferToAccountId
@@ -224,6 +303,9 @@ export const AddTransactionModal: React.FC<Props> = ({ visible, onClose, initial
 
   const filteredCategories = categories.filter(c => c.type === type || c.type === 'both');
   const destinationAccounts = accounts.filter(a => a.id !== selectedAccountId);
+  
+  const activeSourceId = (type === 'expense' && isPayLater) ? payLaterAccountId : selectedAccountId;
+  const activeSourceAccount = accounts.find(a => a.id === activeSourceId);
 
   const getTypeThemeColor = () => {
     if (type === 'expense') return '#ef4444';
@@ -407,14 +489,24 @@ export const AddTransactionModal: React.FC<Props> = ({ visible, onClose, initial
 
               {/* Source Account Selection */}
               <View style={[styles.inputGroup, { borderBottomColor: colors.border }]}>
-                <Text style={[styles.label, { color: colors.textMuted }]}>
-                  {type === 'transfer' ? 'From Account' : 'Account'}
-                </Text>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <Text style={[styles.label, { color: colors.textMuted, marginBottom: 0 }]}>
+                    {type === 'transfer' ? 'From Account' : 'Account'}
+                  </Text>
+                  {activeSourceAccount && activeSourceAccount.type !== 'credit_card' && (
+                    <Text style={{ fontFamily: 'Manrope_500Medium', fontSize: 12, color: colors.textMuted }}>
+                      Balance: ₱{activeSourceAccount.balance.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                    </Text>
+                  )}
+                </View>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pillScroll}>
                   {accounts
                     .filter(acc => {
                       if (type === 'expense') {
                         return isPayLater ? acc.type === 'credit_card' : acc.type !== 'credit_card';
+                      }
+                      if (type === 'transfer') {
+                        return acc.type !== 'credit_card';
                       }
                       return true;
                     })
@@ -490,20 +582,37 @@ export const AddTransactionModal: React.FC<Props> = ({ visible, onClose, initial
 
               {/* Date Selection */}
               <View style={[styles.inputGroup, { borderBottomColor: colors.border, borderBottomWidth: 0 }]}>
-                <Text style={[styles.label, { color: colors.textMuted }]}>Date</Text>
+                <Text style={[styles.label, { color: colors.textMuted }]}>
+                  {isDebtPayment ? 'Debt month to pay' : 'Date'}
+                </Text>
                 <TouchableOpacity onPress={() => setShowDatePicker(true)}>
                   <Text style={{ color: colors.text, fontFamily: 'Manrope_500Medium', fontSize: 16, paddingVertical: 8 }}>
-                    {date.toLocaleDateString()}
+                    {isDebtPayment 
+                      ? new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' }).format(debtPaymentDate)
+                      : date.toLocaleDateString()}
                   </Text>
                 </TouchableOpacity>
+                {isDebtPayment && (
+                  <Text style={{ color: colors.textMuted, fontSize: 11, fontFamily: 'Manrope_400Regular', marginTop: 4 }}>
+                    Payment will be recorded under this month in your debt breakdown.
+                  </Text>
+                )}
                 {showDatePicker && (
                   <DateTimePicker
-                    value={date}
+                    value={isDebtPayment ? debtPaymentDate : date}
                     mode="date"
-                    display="default"
+                    display={Platform.OS === 'ios' ? "spinner" : "default"}
                     onChange={(event, selectedDate) => {
-                      setShowDatePicker(false);
-                      if (selectedDate) setDate(selectedDate);
+                      if (Platform.OS !== 'ios') {
+                        setShowDatePicker(false);
+                      }
+                      if (selectedDate) {
+                        if (isDebtPayment) {
+                          setDebtPaymentDate(selectedDate);
+                        } else {
+                          setDate(selectedDate);
+                        }
+                      }
                     }}
                   />
                 )}
