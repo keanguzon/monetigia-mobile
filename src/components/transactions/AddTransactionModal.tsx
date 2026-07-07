@@ -462,8 +462,8 @@ export const AddTransactionModal: React.FC<Props> = ({ visible, onClose, initial
 const styles = StyleSheet.create({
   overlay: { flex: 1, justifyContent: 'flex-end' },
   backdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)' },
-  sheetContainer: { width: '100%', maxHeight: '90%' },
-  sheet: { borderBottomLeftRadius: 0, borderBottomRightRadius: 0, padding: 24, paddingBottom: 40, flex: 1 },
+  sheetContainer: { width: '100%', maxHeight: '90%', flexShrink: 1 },
+  sheet: { borderBottomLeftRadius: 0, borderBottomRightRadius: 0, padding: 24, paddingBottom: 40 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
   title: { fontFamily: 'BricolageGrotesque_700Bold', fontSize: 24 },
   closeBtn: { padding: 4 },
