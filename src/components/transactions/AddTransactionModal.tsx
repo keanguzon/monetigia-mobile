@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, TouchableOpacity, TextInput, ActivityIndicator, Platform, StyleSheet, ScrollView, DeviceEventEmitter, Alert } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { Modal, View, Text, TouchableOpacity, TextInput, ActivityIndicator, KeyboardAvoidingView, Platform, StyleSheet, ScrollView, DeviceEventEmitter } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GlassCard } from '../ui/GlassCard';
 import { useTheme } from '../../theme/ThemeProvider';
@@ -10,8 +10,6 @@ import { X } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { EVENTS } from '../../lib/events';
 import { toLocalISOWithOffset } from '../../lib/utils';
-import { BottomSheetModal, BottomSheetScrollView, BottomSheetBackdrop } from '@gorhom/bottom-sheet';
-import CurrencyInput from 'react-native-currency-input';
 
 interface Props {
   visible: boolean;
@@ -25,7 +23,7 @@ export const AddTransactionModal: React.FC<Props> = ({ visible, onClose, initial
   const insets = useSafeAreaInsets();
 
   const [type, setType] = useState<'expense' | 'income' | 'transfer'>('expense');
-  const [amount, setAmount] = useState<number | null>(null);
+  const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [date, setDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -40,56 +38,6 @@ export const AddTransactionModal: React.FC<Props> = ({ visible, onClose, initial
   
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
-
-  const bottomSheetRef = useRef<BottomSheetModal>(null);
-
-  useEffect(() => {
-    console.log("[AddTransactionModal] visible:", visible, "user:", !!user, "ref is null?:", !bottomSheetRef.current);
-    if (visible) {
-      Alert.alert("Debug Modal", `visible: ${visible}, user: ${!!user}, ref is null?: ${!bottomSheetRef.current}`);
-      if (!user) {
-        console.log("[AddTransactionModal] closing because user is null!");
-        onClose();
-        return;
-      }
-      console.log("[AddTransactionModal] calling present()");
-      bottomSheetRef.current?.present();
-    } else {
-      console.log("[AddTransactionModal] calling dismiss()");
-      bottomSheetRef.current?.dismiss();
-    }
-  }, [visible, user]);
-
-  const renderBackdrop = useCallback(
-    (props: any) => (
-      <BottomSheetBackdrop
-        {...props}
-        disappearsOnIndex={-1}
-        appearsOnIndex={0}
-        opacity={0.6}
-        pressBehavior={isLoading ? 'none' : 'close'}
-      />
-    ),
-    [isLoading]
-  );
-
-  const GlassBackground = useCallback(
-    ({ style }: { style?: any }) => (
-      <GlassCard 
-        style={[style, { borderBottomLeftRadius: 0, borderBottomRightRadius: 0, overflow: 'hidden' }]} 
-        glassStyle="regular" 
-      />
-    ),
-    []
-  );
-
-  const handleDismiss = () => {
-    if (isLoading) {
-      bottomSheetRef.current?.present();
-      return;
-    }
-    onClose();
-  };
 
   useEffect(() => {
     if (visible && user) {
@@ -123,7 +71,7 @@ export const AddTransactionModal: React.FC<Props> = ({ visible, onClose, initial
 
   const resetForm = () => {
     setType('expense');
-    setAmount(null);
+    setAmount('');
     setDescription('');
     setDate(new Date());
     setTransferToAccountId(null);
@@ -193,7 +141,7 @@ export const AddTransactionModal: React.FC<Props> = ({ visible, onClose, initial
     setErrorMsg('');
 
     // Validation
-    const numericAmount = amount || 0;
+    const numericAmount = parseFloat(amount.replace(/,/g, '')) || 0;
     if (numericAmount <= 0) {
       setErrorMsg("Amount must be greater than zero.");
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -283,265 +231,306 @@ export const AddTransactionModal: React.FC<Props> = ({ visible, onClose, initial
     return '#3b82f6';
   };
 
+  const handleAmountChange = (text: string) => {
+    let clean = text.replace(/[^0-9.]/g, '');
+    
+    // Prevent multiple dots
+    const parts = clean.split('.');
+    if (parts.length > 2) {
+      clean = parts[0] + '.' + parts.slice(1).join('');
+    }
+    
+    const dotIndex = clean.indexOf('.');
+    let integerPart = dotIndex !== -1 ? clean.substring(0, dotIndex) : clean;
+    let decimalPart = dotIndex !== -1 ? clean.substring(dotIndex + 1) : null;
+    
+    if (integerPart.length > 9) {
+      integerPart = integerPart.substring(0, 9);
+    }
+    
+    let formattedInteger = '';
+    if (integerPart) {
+      formattedInteger = Number(integerPart).toLocaleString('en-US');
+    }
+    
+    let finalFormatted = formattedInteger;
+    if (dotIndex !== -1) {
+      const truncatedDecimal = decimalPart !== null ? decimalPart.substring(0, 2) : '';
+      finalFormatted = `${formattedInteger}.${truncatedDecimal}`;
+    }
+    
+    setAmount(finalFormatted);
+  };
+
+  const handleAmountBlur = () => {
+    if (!amount) return;
+    const parts = amount.split('.');
+    if (parts.length === 1) {
+      setAmount(`${amount}.00`);
+    } else {
+      const integerPart = parts[0];
+      let decimalPart = parts[1];
+      if (decimalPart.length === 0) {
+        setAmount(`${integerPart}.00`);
+      } else if (decimalPart.length === 1) {
+        setAmount(`${integerPart}.${decimalPart}0`);
+      }
+    }
+  };
+
   return (
-    <BottomSheetModal
-      ref={bottomSheetRef}
-      index={0}
-      snapPoints={['85%', '98%']}
-      // backdropComponent={renderBackdrop}
-      // backgroundComponent={GlassBackground}
-      onDismiss={handleDismiss}
-      enablePanDownToClose={!isLoading}
-      keyboardBehavior="extend"
-      keyboardBlurBehavior="restore"
-      handleIndicatorStyle={{ backgroundColor: colors.border, width: 40 }}
-      handleStyle={{ borderTopLeftRadius: 24, borderTopRightRadius: 24 }}
-    >
-      <BottomSheetScrollView 
-        showsVerticalScrollIndicator={false} 
-        contentContainerStyle={{ padding: 24, paddingBottom: Math.max(40, insets.bottom + 16) }}
-      >
-        <View style={styles.header}>
-          <Text style={[styles.title, { color: colors.text }]}>Add Transaction</Text>
-          <TouchableOpacity onPress={isLoading ? undefined : () => bottomSheetRef.current?.dismiss()} style={styles.closeBtn} disabled={isLoading}>
-            <X color={isLoading ? colors.border : colors.textMuted} size={24} />
-          </TouchableOpacity>
-        </View>
-
-        {errorMsg ? (
-          <View style={styles.errorBox}>
-            <Text style={styles.errorText}>{errorMsg}</Text>
-          </View>
-        ) : null}
-
-        {/* Type Selector (3 Tabs) */}
-        <View style={styles.typeToggle}>
-          <TouchableOpacity 
-            style={[styles.typeBtn, type === 'expense' ? { backgroundColor: '#ef4444' } : undefined]}
-            onPress={() => {
-              Haptics.selectionAsync();
-              setType('expense');
-            }}
-          >
-            <Text style={[styles.typeText, { color: type === 'expense' ? '#fff' : colors.textMuted }]}>Expense</Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.typeBtn, type === 'income' ? { backgroundColor: colors.primary } : undefined]}
-            onPress={() => {
-              Haptics.selectionAsync();
-              setType('income');
-            }}
-          >
-            <Text style={[styles.typeText, { color: type === 'income' ? '#fff' : colors.textMuted }]}>Income</Text>
-          </TouchableOpacity>
-          {accounts.length >= 2 && (
-            <TouchableOpacity 
-              style={[styles.typeBtn, type === 'transfer' ? { backgroundColor: '#3b82f6' } : undefined]}
-              onPress={() => {
-                Haptics.selectionAsync();
-                setType('transfer');
-              }}
-            >
-              <Text style={[styles.typeText, { color: type === 'transfer' ? '#fff' : colors.textMuted }]}>Transfer</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {/* Amount Input */}
-        <View style={[styles.inputGroup, { borderBottomColor: colors.border }]}>
-          <Text style={[styles.label, { color: colors.textMuted }]}>Amount (PHP)</Text>
-          <CurrencyInput
-            style={[styles.input, { color: getTypeThemeColor() }]}
-            value={amount}
-            onChangeValue={(val) => setAmount(val)}
-            prefix=""
-            delimiter=","
-            separator="."
-            precision={2}
-            placeholder="0.00"
-            placeholderTextColor={colors.textMuted}
-            keyboardType="decimal-pad"
-          />
-        </View>
-
-        {/* Description Input */}
-        <View style={[styles.inputGroup, { borderBottomColor: colors.border }]}>
-          <Text style={[styles.label, { color: colors.textMuted }]}>Description</Text>
-          <TextInput
-            style={[styles.input, { color: colors.text, fontSize: 16 }]}
-            placeholder={type === 'transfer' ? 'Transfer between accounts' : 'What was this for?'}
-            placeholderTextColor={colors.textMuted}
-            value={description}
-            onChangeText={setDescription}
-          />
-        </View>
-
-        {/* Pay Later Toggle */}
-        {type === 'expense' && accounts.some(a => a.type === 'credit_card') && (
-          <View style={[styles.inputGroup, { borderBottomColor: colors.border, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12 }]}>
-            <View style={{ flex: 1, paddingRight: 16 }}>
-               <Text style={{ color: colors.text, fontFamily: 'BricolageGrotesque_700Bold', fontSize: 16 }}>Pay Later (Debt)</Text>
-               <Text style={{ color: colors.textMuted, fontSize: 12, fontFamily: 'Manrope_400Regular', marginTop: 2 }}>
-                 Charge this expense to a credit card or debt account
-               </Text>
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={isLoading ? () => {} : onClose}>
+      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.overlay}>
+        <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={isLoading ? undefined : onClose} disabled={isLoading} />
+        
+        <View style={styles.sheetContainer}>
+          <GlassCard style={[styles.sheet, { paddingBottom: Math.max(40, insets.bottom + 16) }]} glassStyle="regular">
+            <View style={styles.header}>
+              <Text style={[styles.title, { color: colors.text }]}>Add Transaction</Text>
+              <TouchableOpacity onPress={isLoading ? undefined : onClose} style={styles.closeBtn} disabled={isLoading}>
+                <X color={isLoading ? colors.border : colors.textMuted} size={24} />
+              </TouchableOpacity>
             </View>
-            <TouchableOpacity 
-              onPress={() => {
-                Haptics.selectionAsync();
-                const nextVal = !isPayLater;
-                setIsPayLater(nextVal);
-                if (nextVal) {
-                  const firstCredit = accounts.find(a => a.type === 'credit_card');
-                  if (firstCredit) setPayLaterAccountId(firstCredit.id);
-                } else {
-                  const firstNonCredit = accounts.find(a => a.type !== 'credit_card');
-                  if (firstNonCredit) setSelectedAccountId(firstNonCredit.id);
-                }
-              }}
-              style={{
-                width: 50,
-                height: 30,
-                borderRadius: 15,
-                backgroundColor: isPayLater ? '#ef4444' : colors.border,
-                justifyContent: 'center',
-                paddingHorizontal: 2
-              }}
-            >
-              <View style={{
-                width: 26,
-                height: 26,
-                borderRadius: 13,
-                backgroundColor: '#fff',
-                alignSelf: isPayLater ? 'flex-end' : 'flex-start',
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.2,
-                shadowRadius: 2,
-                elevation: 2
-              }} />
-            </TouchableOpacity>
-          </View>
-        )}
 
-        {/* Source Account Selection */}
-        <View style={[styles.inputGroup, { borderBottomColor: colors.border }]}>
-          <Text style={[styles.label, { color: colors.textMuted }]}>
-            {type === 'transfer' ? 'From Account' : 'Account'}
-          </Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pillScroll}>
-            {accounts
-              .filter(acc => {
-                if (type === 'expense') {
-                  return isPayLater ? acc.type === 'credit_card' : acc.type !== 'credit_card';
-                }
-                return true;
-              })
-              .map(acc => {
-                const activeId = (type === 'expense' && isPayLater) ? payLaterAccountId : selectedAccountId;
-                const isSelected = activeId === acc.id;
-                return (
+            <ScrollView showsVerticalScrollIndicator={false} style={{ flexShrink: 1 }} contentContainerStyle={{ paddingBottom: 24 }}>
+              {errorMsg ? (
+                <View style={styles.errorBox}>
+                  <Text style={styles.errorText}>{errorMsg}</Text>
+                </View>
+              ) : null}
+
+              {/* Type Selector (3 Tabs) */}
+              <View style={styles.typeToggle}>
+                <TouchableOpacity 
+                  style={[styles.typeBtn, type === 'expense' ? { backgroundColor: '#ef4444' } : undefined]}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setType('expense');
+                  }}
+                >
+                  <Text style={[styles.typeText, { color: type === 'expense' ? '#fff' : colors.textMuted }]}>Expense</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={[styles.typeBtn, type === 'income' ? { backgroundColor: colors.primary } : undefined]}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setType('income');
+                  }}
+                >
+                  <Text style={[styles.typeText, { color: type === 'income' ? '#fff' : colors.textMuted }]}>Income</Text>
+                </TouchableOpacity>
+                {accounts.length >= 2 && (
                   <TouchableOpacity 
-                    key={acc.id} 
+                    style={[styles.typeBtn, type === 'transfer' ? { backgroundColor: '#3b82f6' } : undefined]}
                     onPress={() => {
                       Haptics.selectionAsync();
-                      if (type === 'expense' && isPayLater) {
-                        setPayLaterAccountId(acc.id);
+                      setType('transfer');
+                    }}
+                  >
+                    <Text style={[styles.typeText, { color: type === 'transfer' ? '#fff' : colors.textMuted }]}>Transfer</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {/* Amount Input */}
+              <View style={[styles.inputGroup, { borderBottomColor: colors.border }]}>
+                <Text style={[styles.label, { color: colors.textMuted }]}>Amount (PHP)</Text>
+                <TextInput
+                  style={[styles.input, { color: getTypeThemeColor() }]}
+                  value={amount}
+                  onChangeText={handleAmountChange}
+                  onBlur={handleAmountBlur}
+                  placeholder="0.00"
+                  placeholderTextColor={colors.textMuted}
+                  keyboardType="decimal-pad"
+                />
+              </View>
+
+              {/* Description Input */}
+              <View style={[styles.inputGroup, { borderBottomColor: colors.border }]}>
+                <Text style={[styles.label, { color: colors.textMuted }]}>Description</Text>
+                <TextInput
+                  style={[styles.input, { color: colors.text, fontSize: 16 }]}
+                  placeholder={type === 'transfer' ? 'Transfer between accounts' : 'What was this for?'}
+                  placeholderTextColor={colors.textMuted}
+                  value={description}
+                  onChangeText={setDescription}
+                />
+              </View>
+
+              {/* Pay Later Toggle */}
+              {type === 'expense' && accounts.some(a => a.type === 'credit_card') && (
+                <View style={[styles.inputGroup, { borderBottomColor: colors.border, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12 }]}>
+                  <View style={{ flex: 1, paddingRight: 16 }}>
+                     <Text style={{ color: colors.text, fontFamily: 'BricolageGrotesque_700Bold', fontSize: 16 }}>Pay Later (Debt)</Text>
+                     <Text style={{ color: colors.textMuted, fontSize: 12, fontFamily: 'Manrope_400Regular', marginTop: 2 }}>
+                       Charge this expense to a credit card or debt account
+                     </Text>
+                  </View>
+                  <TouchableOpacity 
+                    onPress={() => {
+                      Haptics.selectionAsync();
+                      const nextVal = !isPayLater;
+                      setIsPayLater(nextVal);
+                      if (nextVal) {
+                        const firstCredit = accounts.find(a => a.type === 'credit_card');
+                        if (firstCredit) setPayLaterAccountId(firstCredit.id);
                       } else {
-                        setSelectedAccountId(acc.id);
+                        const firstNonCredit = accounts.find(a => a.type !== 'credit_card');
+                        if (firstNonCredit) setSelectedAccountId(firstNonCredit.id);
                       }
                     }}
-                    style={[styles.pill, { borderColor: colors.border, backgroundColor: isSelected ? getTypeThemeColor() : 'transparent' }]}
+                    style={{
+                      width: 50,
+                      height: 30,
+                      borderRadius: 15,
+                      backgroundColor: isPayLater ? '#ef4444' : colors.border,
+                      justifyContent: 'center',
+                      paddingHorizontal: 2
+                    }}
                   >
-                    <Text style={{ color: isSelected ? '#fff' : colors.text, fontFamily: 'Manrope_500Medium' }}>{acc.name}</Text>
+                    <View style={{
+                      width: 26,
+                      height: 26,
+                      borderRadius: 13,
+                      backgroundColor: '#fff',
+                      alignSelf: isPayLater ? 'flex-end' : 'flex-start',
+                      shadowColor: '#000',
+                      shadowOffset: { width: 0, height: 2 },
+                      shadowOpacity: 0.2,
+                      shadowRadius: 2,
+                      elevation: 2
+                    }} />
                   </TouchableOpacity>
-                );
-              })}
-          </ScrollView>
-        </View>
+                </View>
+              )}
 
-        {/* Destination Account Selection (only for transfers) */}
-        {type === 'transfer' && (
-          <View style={[styles.inputGroup, { borderBottomColor: colors.border }]}>
-            <Text style={[styles.label, { color: colors.textMuted }]}>To Account</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pillScroll}>
-              {destinationAccounts.map(acc => (
-                <TouchableOpacity 
-                  key={acc.id} 
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    setTransferToAccountId(acc.id);
-                  }}
-                  style={[styles.pill, { borderColor: colors.border, backgroundColor: transferToAccountId === acc.id ? '#3b82f6' : 'transparent' }]}
-                >
-                  <Text style={{ color: transferToAccountId === acc.id ? '#fff' : colors.text, fontFamily: 'Manrope_500Medium' }}>{acc.name}</Text>
+              {/* Source Account Selection */}
+              <View style={[styles.inputGroup, { borderBottomColor: colors.border }]}>
+                <Text style={[styles.label, { color: colors.textMuted }]}>
+                  {type === 'transfer' ? 'From Account' : 'Account'}
+                </Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pillScroll}>
+                  {accounts
+                    .filter(acc => {
+                      if (type === 'expense') {
+                        return isPayLater ? acc.type === 'credit_card' : acc.type !== 'credit_card';
+                      }
+                      return true;
+                    })
+                    .map(acc => {
+                      const activeId = (type === 'expense' && isPayLater) ? payLaterAccountId : selectedAccountId;
+                      const isSelected = activeId === acc.id;
+                      return (
+                        <TouchableOpacity 
+                          key={acc.id} 
+                          onPress={() => {
+                            Haptics.selectionAsync();
+                            if (type === 'expense' && isPayLater) {
+                              setPayLaterAccountId(acc.id);
+                            } else {
+                              setSelectedAccountId(acc.id);
+                            }
+                          }}
+                          style={[styles.pill, { borderColor: colors.border, backgroundColor: isSelected ? getTypeThemeColor() : 'transparent' }]}
+                        >
+                          <Text style={{ color: isSelected ? '#fff' : colors.text, fontFamily: 'Manrope_500Medium' }}>{acc.name}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                </ScrollView>
+              </View>
+
+              {/* Destination Account Selection (only for transfers) */}
+              {type === 'transfer' && (
+                <View style={[styles.inputGroup, { borderBottomColor: colors.border }]}>
+                  <Text style={[styles.label, { color: colors.textMuted }]}>To Account</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pillScroll}>
+                    {destinationAccounts.map(acc => (
+                      <TouchableOpacity 
+                        key={acc.id} 
+                        onPress={() => {
+                          Haptics.selectionAsync();
+                          setTransferToAccountId(acc.id);
+                        }}
+                        style={[styles.pill, { borderColor: colors.border, backgroundColor: transferToAccountId === acc.id ? '#3b82f6' : 'transparent' }]}
+                      >
+                        <Text style={{ color: transferToAccountId === acc.id ? '#fff' : colors.text, fontFamily: 'Manrope_500Medium' }}>{acc.name}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                  {destinationAccounts.length === 0 && (
+                    <Text style={{ color: colors.textMuted, fontSize: 12, fontFamily: 'Manrope_400Regular', marginTop: 4 }}>
+                      Create another account to enable transfers.
+                    </Text>
+                  )}
+                </View>
+              )}
+
+              {/* Category Selection (only for income/expense) */}
+              {type !== 'transfer' && (
+                <View style={[styles.inputGroup, { borderBottomColor: colors.border }]}>
+                  <Text style={[styles.label, { color: colors.textMuted }]}>Category</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pillScroll}>
+                    {filteredCategories.map(cat => (
+                      <TouchableOpacity 
+                        key={cat.id} 
+                        onPress={() => {
+                          Haptics.selectionAsync();
+                          setSelectedCategoryId(cat.id);
+                        }}
+                        style={[styles.pill, { borderColor: colors.border, backgroundColor: selectedCategoryId === cat.id ? getTypeThemeColor() : 'transparent' }]}
+                      >
+                        <Text style={{ color: selectedCategoryId === cat.id ? '#fff' : colors.text, fontFamily: 'Manrope_500Medium' }}>{cat.name}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+
+              {/* Date Selection */}
+              <View style={[styles.inputGroup, { borderBottomColor: colors.border, borderBottomWidth: 0 }]}>
+                <Text style={[styles.label, { color: colors.textMuted }]}>Date</Text>
+                <TouchableOpacity onPress={() => setShowDatePicker(true)}>
+                  <Text style={{ color: colors.text, fontFamily: 'Manrope_500Medium', fontSize: 16, paddingVertical: 8 }}>
+                    {date.toLocaleDateString()}
+                  </Text>
                 </TouchableOpacity>
-              ))}
-            </ScrollView>
-            {destinationAccounts.length === 0 && (
-              <Text style={{ color: colors.textMuted, fontSize: 12, fontFamily: 'Manrope_400Regular', marginTop: 4 }}>
-                Create another account to enable transfers.
-              </Text>
-            )}
-          </View>
-        )}
+                {showDatePicker && (
+                  <DateTimePicker
+                    value={date}
+                    mode="date"
+                    display="default"
+                    onChange={(event, selectedDate) => {
+                      setShowDatePicker(false);
+                      if (selectedDate) setDate(selectedDate);
+                    }}
+                  />
+                )}
+              </View>
 
-        {/* Category Selection (only for income/expense) */}
-        {type !== 'transfer' && (
-          <View style={[styles.inputGroup, { borderBottomColor: colors.border }]}>
-            <Text style={[styles.label, { color: colors.textMuted }]}>Category</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pillScroll}>
-              {filteredCategories.map(cat => (
-                <TouchableOpacity 
-                  key={cat.id} 
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    setSelectedCategoryId(cat.id);
-                  }}
-                  style={[styles.pill, { borderColor: colors.border, backgroundColor: selectedCategoryId === cat.id ? getTypeThemeColor() : 'transparent' }]}
-                >
-                  <Text style={{ color: selectedCategoryId === cat.id ? '#fff' : colors.text, fontFamily: 'Manrope_500Medium' }}>{cat.name}</Text>
-                </TouchableOpacity>
-              ))}
+              {/* Submit Button */}
+              <TouchableOpacity 
+                style={[styles.submitBtn, { backgroundColor: getTypeThemeColor(), opacity: isLoading ? 0.7 : 1 }]} 
+                onPress={handleSubmit}
+                disabled={isLoading}
+              >
+                {isLoading ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitText}>Save Transaction</Text>}
+              </TouchableOpacity>
+              
             </ScrollView>
-          </View>
-        )}
-
-        {/* Date Selection */}
-        <View style={[styles.inputGroup, { borderBottomColor: colors.border, borderBottomWidth: 0 }]}>
-          <Text style={[styles.label, { color: colors.textMuted }]}>Date</Text>
-          <TouchableOpacity onPress={() => setShowDatePicker(true)}>
-            <Text style={{ color: colors.text, fontFamily: 'Manrope_500Medium', fontSize: 16, paddingVertical: 8 }}>
-              {date.toLocaleDateString()}
-            </Text>
-          </TouchableOpacity>
-          {showDatePicker && (
-            <DateTimePicker
-              value={date}
-              mode="date"
-              display="default"
-              onChange={(event, selectedDate) => {
-                setShowDatePicker(false);
-                if (selectedDate) setDate(selectedDate);
-              }}
-            />
-          )}
+          </GlassCard>
         </View>
-
-        {/* Submit Button */}
-        <TouchableOpacity 
-          style={[styles.submitBtn, { backgroundColor: getTypeThemeColor(), opacity: isLoading ? 0.7 : 1 }]} 
-          onPress={handleSubmit}
-          disabled={isLoading}
-        >
-          {isLoading ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitText}>Save Transaction</Text>}
-        </TouchableOpacity>
-        
-      </BottomSheetScrollView>
-    </BottomSheetModal>
+      </KeyboardAvoidingView>
+    </Modal>
   );
 };
 
 const styles = StyleSheet.create({
+  overlay: { flex: 1, justifyContent: 'flex-end' },
+  backdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)' },
+  sheetContainer: { width: '100%', maxHeight: '90%', flexShrink: 1 },
+  sheet: { borderBottomLeftRadius: 0, borderBottomRightRadius: 0, padding: 24, flexShrink: 1 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
   title: { fontFamily: 'BricolageGrotesque_700Bold', fontSize: 24 },
   closeBtn: { padding: 4 },
@@ -554,6 +543,7 @@ const styles = StyleSheet.create({
   label: { fontFamily: 'Manrope_400Regular', fontSize: 12, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 },
   input: { fontFamily: 'BricolageGrotesque_700Bold', fontSize: 32, padding: 0 },
   pillScroll: { flexDirection: 'row' },
+  pillWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   pill: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 999, borderWidth: 1, marginRight: 8, marginVertical: 4 },
   submitBtn: { padding: 16, borderRadius: 12, alignItems: 'center', marginTop: 16 },
   submitText: { fontFamily: 'BricolageGrotesque_700Bold', color: '#fff', fontSize: 18 }
